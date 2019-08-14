@@ -63,7 +63,7 @@ The Treasurer will be elected according to the same criteria and process as the 
 
 The Marketing Lead will be elected according to the same criteria and process as the Director. The Marketing Lead will have the following responsibilities.
 
-- Develop the Marketing portion, including metris, of the annual operating plan in consultation with the Technical Community. Report regularly to the Steering Committee on progress against plan.
+- Develop the Marketing portion, including metrics, of the annual operating plan in consultation with the Technical Community. Report regularly to the Steering Committee on progress against plan.
 - Work with the Technical Community and other contributors to develop and execute launch plans for major releases and any major events.
 - Work with the Community Manager and other contributors as needed to support ongoing marketing activities.
 
@@ -80,7 +80,7 @@ The Committee may choose to define and formalize additional roles to assist the 
 
 Elections and any other voting decisions require a quorum of 50% of voting members. Voting can be held during Committee meetings, or by electronic means within a specified time period.
 
-Amendments to this or Policy documents require a majority vote.
+Amendments to this or Policy documents require a majority vote of the Steering Committee.
 
 ### Compliance with Policies and Licenses
 
