@@ -5,7 +5,7 @@ could be considered a "1.0 architecture". As a key component to the platform, Sy
 requires a large portion of this focus. This document outlines the first mini-project
 involved in this effort, titled "MP1".
 
-The first portion of the document section can be read much like a design document. It's job
+The first portion of the document section can be read much like a design document. Its job
 is to describe the intended "end state". The latter portion of the document will cover
 the concrete steps and milestones for getting there.
 
