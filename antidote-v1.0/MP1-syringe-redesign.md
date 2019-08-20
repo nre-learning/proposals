@@ -12,28 +12,53 @@ the concrete steps and milestones for getting there.
 First, an overview of the existing architecture, and a high-level overview of what we want
 to change.
 
+## High-Level Architecture
+
+The current Syringe architecture is quite simple. It all compiles to a single binary: `syringed`, but is logically
+built of two components - the scheduler, and the API server:
+
 ![](images/syringe_old.png)
 
-Advantages:
-- Single binary
+At start, this binary loads the entire curriculum into memory. It also maintains an internal map of
+which lessons are active and what stage they're running, etc. In short, everything is contained within
+this single program - both from a code perspective, as well as runtime state.
+
+This simple approach has several advantages:
+
+- Single binary, easy to deploy
 - No external database to worry about
-- Allowed us to get NRE Labs public quick
+- Allowed us to get NRE Labs to a public PoC quickly
 
-Disadvantages
-- Single point of failure
-- Everything is tightly coupled, harder to extend
-- State is kept in-memory, so restart means state is lost
-- This means we need to kill all existing lessons on start
-- Fairly opaque - all monitoring is custom
+However, it also has some key disadvantages:
 
-Proposed New Syringe Architecture
+- `syringed` is a single point of failure
+- Everything is tightly coupled, so extending Syringe's capabilities is more difficult.
+- State is kept in-memory, so if Syringe is restarted, state is lost. This is why we currently kill
+  all running lessons every time Syringe starts.
+- Fairly opaque - all monitoring is custom, and relies primarily on good logs.
+
+The new Syringe architecture being proposed in this document can be summarized in the following points:
+
+- Breaking up the logical services currently offered within `syringed` into separate microservices.
+- Move state to an external database of some kind (TBD)
+- Add better logging and observability instrumentation to aid in better production debugging.
 
 ![](images/syringe_new.png)
 
+This design has some key advantages over the current approach:
+
 - Better resilience - no “one syringe”
-- Easier to extend - just pop a new service on the message bus
-- Easier to reason about, maintain, and contribute to individual services
-- Totally stateless services - all state managed by a proper database.
+- Easier to extend - just pop a new service on the message bus. In the above diagram, we note that other
+  non-Syringe software like StackStorm can listen on this event bus and further extend the capabilities of
+  the platform.
+- Easier to reason about, maintain, and contribute to individual services.
+- Totally stateless services - all state managed by a proper database. This not only means managing state
+  in the right way, it also means that Syringe microservices can scale horizontally, aiding in overall
+  system resilience.
+
+## Design Area - Microservices and Message Queue
+
+## Design Area - External State
 
 ## Design Area - Observability Instrumentation
 
