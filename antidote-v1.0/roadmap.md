@@ -59,7 +59,8 @@ What will follow is a series of minor release versions, with a list of features 
 
 ## v0.5.x
 
-- Feedback Box on every page
+- [Feedback Box on every page](https://github.com/nre-learning/antidote-web/issues/76)
+- [Support for Optional Objectives](https://github.com/nre-learning/proposals/pull/6)
 
 ## v0.6.x
 
