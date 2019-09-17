@@ -73,10 +73,10 @@ What will follow is a series of minor release versions, with a list of features 
 
 - Foo
 
-## v0.9.x - September 2019
+## v0.9.x
 
 - Foo
 
-## v1.0.0 - October 2019
+## v1.0.0
 
 - Foo
