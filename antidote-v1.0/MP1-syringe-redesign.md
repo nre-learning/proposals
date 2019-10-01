@@ -12,6 +12,31 @@ the concrete steps and milestones for getting there.
 First, an overview of the existing architecture, and a high-level overview of what we want
 to change.
 
+## Justification
+
+In short, the existing Syringe design is monolithic, and we're going to break it up into individual microservices. To facilitate this, I'm doing a good amount of prototyping, and I quickly realized that covering my discoveries and experiences here would make a good blog post series.
+
+### Monoliths are Okay
+
+The existing architecture was intentional - the name of the game initially was getting a PoC out quickly, so that the community could get their hands on the project ASAP. It was demonstrably easier at the time to just place all functionality and state into a single binary and deal with the downsides.
+
+On talking with others, it seems this isn't an uncommon choice - it's a tradeoff that may be worth considering if you have similar requirements. If, instead, I was building this for a business that required it to be stable from the outset, and couldn't tolerate a rewrite a year down the line, I would probably have made different decisions.
+
+A year ago, the most important thing to do was to put **something** out there that showed the promise of curriculum-as-code, and publishing a reference curriculum (NRE Labs) that the community could start contributing to. Since we knew NRE Labs was never going to be a revenue-generator, it was okay for us to make short-term decisions that would otherwise seem crazy - things like keeping all state in memory in a single binary that would occasionally crash and wipe its own slate.
+
+### Why Microservices?
+
+In making every design decision, it has to come back to your requirements. For us, the requirements for this phase of things are pretty clear:
+
+- Resilience is becoming more important. To create a stable platform for the community to rely on for learning infrastructure automation for the long-term, a 
+
+It's very trendy right now to move to a microservices application architecture (or at least talk about it) so to avoid getting lumped in with the bandwagon crowd, let me spend some time talking about some of the reasons we're doing it here.
+
+That said, we're clearly moving ahead with the rewrite to microservices, so here are some reasons:
+
+- A year ago our chief consideration was getting the project off the ground quickly. Now, our chief consideration is to make it easier for folks to contribute to the Antidote platform. Breaking it up into different components means a lot less for folks to wrap their heads around at a time.
+- The application is still pretty small, and the internal architecture is actually pretty compatible with the intended rewrite pattern with channels and NATS, so the pain is reduced. 
+
 ## High-Level Architecture
 
 The current Syringe architecture is quite simple. It all compiles to a single binary: `syringed`, but is logically
@@ -67,7 +92,7 @@ The message queue + database is a common distributed systems model (see stacksto
 
 Having state in an external component means we can allow everything else to be stateless.
 
-The database will PURELY be used for state management, so we can use a common source of state for all components, complete with all the necessary features like locking
+The database will primarily be used for state management, so we can use a common source of state for all components, complete with all the necessary features like locking
 
 The API can easily be stateless because it's just designed to translate API calls into message queue messages essentially, or perform reads on teh database. It won't make direct writes to the DB. As a result, this can scale out easily.
 
@@ -77,7 +102,10 @@ On the other hand, we could do what StackStorm does with packs, which is to prov
 
 Maybe a "syrctl import" command is needed to facilitate this.
 
+Will also need a table for "locking" a livelesson. Any time an action is being taken on a livelesson, such as changing stage, or starting a new one, etc - a row should be added to this table with the value of the livelesson. Before starting any activity, this table is consulted, and if a value exists, do not take the action. Might be worth considering queuing actions but it's probably best to not do this, and outright reject them at the API layer if a livelesson is locked.
 
+Need to figure out a way to represent a user ID that isn't bound to a specific platform. Like, we **think** we will
+use Discourse but we may use any of the platforms in MP6. The data model should account for this.
 
 ### Design Domain - Microservices and Message Queue
 
@@ -86,8 +114,32 @@ Services:
 - Scheduler
 - Garbage Collector
 - Stats (influxdb)
+- Objective-checker
 
-NATS Streaming is the likely candidate for this. It's super simple and blazing fast.
+NATS is the likely candidate for this. It's super simple and blazing fast.
+
+------------------------
+We'll need a centralized messaging package for:
+- one place for services to publish messages to each other
+- centralized message definitions
+- centralized observability instrumentation for service-to-service comms. (will still need API to be instrumented)
+
+Assuming we use NATS, I like the idea of [using native Go channels](https://github.com/nats-io/nats.go#using-go-channels-netchan)
+to communicate between services. So, this package should offer a function where you pass in the config,
+and it returns a struct containing all of the channels needed for inter-service communication. Each service
+keeps track of this struct and whenever it needs to send or receive data, that struct will have a channel for
+that need.
+
+I believe NATS is our best candidate here. It's simple, fast, and built in Go (which Syringe is as well).
+
+One decision we'll have to make is if we want to use plain old NATS, or if we think there's a case for
+[NATS Streaming](https://nats-io.github.io/docs/nats_streaming/intro.html). I don't think we need the extra
+features offered there, but am open to arguments otherwise. One thing that will help is figuring out the code impact - is there a difference in how we connect to NATS, or is this just an add-on to the server side of things?
+
+I don't *think* we need NATS streaming - one reason is that each worker is designed to receive a message and spawn a goroutine to handle it, so we can scale within each running worker process, and we can also always spin up more than one worker process for additional responsiveness (and resiliency)
+
+---------------
+
 
 Message queue design. As long as there's a component to translate events to achievements
 then we will pick them up. If not then we will configure the messages to time out and they just go nowhere. Allows us to just plug things into the bus to enable the functionality
@@ -95,6 +147,13 @@ then we will pick them up. If not then we will configure the messages to time ou
 The design allows us to enable or disable features simply by starting the relevant processes to listen on the message queue or the Syringe API. If we don't want to export to influx, we simply don't enable that process. If we don't want to enable gamification, don't start the translator process. All messages like this will be sent with a TTL, so if nothing is there to pick messages up off the queue, they'll disappear after a while.
 
 The scheduler can also scale out as long as we ensure only one of the instances of the scheduler takes a request off of the queue (i.e. no fan-out). However, the scheduler should still direct all incoming requests into a goroutine so that each individual scheduler process can handle multiple processes concurrently, just like it does today. In addition, since the scheduler will be writing to the database (as will the GC process), we need to make sure we can perform transactions on a per-UUID basis. Need to put more detailed thought into this part.
+
+> Maybe we could use NATS for this - when a stage is activated, a message will be sent to subscribers, which will include a set of `syringe-verify` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
+
+https://micro.mu
+
+Objective complettion is also an event that should eventually be sent out on the message queue.
+
 
 ### Design Area - Observability Instrumentation
 
@@ -128,13 +187,12 @@ Traces will begin on receipt of requests, either in GRPC (below) or rest-gateway
 -https://github.com/grpc-ecosystem/go-grpc-middleware/
 -NATS can also be instrumented: https://github.com/nats-io/not.go
 
+
 Spans
 -Api-to-scheduler
 -Scheduler-to-st2
 -Etc - need to build a trace diagram on the whiteboard and copy it here.
 -Links
-
-
 
 ### Design Area - Lesson Networking
 
@@ -150,6 +208,8 @@ in the order shown, and can be added to any platform release that is deemed suit
 This document will be updated as these milestones are achieved, with links to the Pull Request(s) and/or
 that satisfy them.
 
+### MP1.alpha - Move to go modules
+
 ### MP1.1 - Move state to external database
 
 ### MP1.2 - Break out garbage collection
@@ -159,6 +219,8 @@ that satisfy them.
 ### MP1.5 - Separate API and Scheduler and implement message queue
 
 ### MP1.6 - Structured and centralized logging with Fluentd
+
+Will this also include error reporting?
 
 ### MP1.7 - Observability instrumentation
 
