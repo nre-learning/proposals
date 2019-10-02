@@ -12,6 +12,8 @@ the concrete steps and milestones for getting there.
 First, an overview of the existing architecture, and a high-level overview of what we want
 to change.
 
+
+
 ## Justification
 
 In short, the existing Syringe design is monolithic, and we're going to break it up into individual microservices. To facilitate this, I'm doing a good amount of prototyping, and I quickly realized that covering my discoveries and experiences here would make a good blog post series.
@@ -193,6 +195,9 @@ Spans
 -Scheduler-to-st2
 -Etc - need to build a trace diagram on the whiteboard and copy it here.
 -Links
+
+
+**ALSO** - will definitely need to do better about reporting errors from Syringe. And as a side note, in production we should ensure these are surfacing to someone.
 
 ### Design Area - Lesson Networking
 
