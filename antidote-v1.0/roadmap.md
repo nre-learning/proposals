@@ -18,9 +18,11 @@ These are mini-projects which will have their own sub-tasks to be executed in th
 
 In general, these mini-projects should be done in sequence. There will be some natural overlap, but they are
 ordered in terms of not only priority, but also complexity, and there are some hard dependencies between
-them, which will be called out in separate documents.
+them, which we'll try to call out within each design document.
 
 ## MP1: Syringe Re-architecture
+
+**Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/3
 
 This effort has three objectives:
 
@@ -28,24 +30,21 @@ This effort has three objectives:
 - Make it easier to reason about and contribute to Syringe components
 - Decrease the effort involved to integrate external systems with Syringe
 
-The [MP1 doc (still under review)](https://github.com/nre-learning/proposals/pull/3) contains the proposed design information and a
-series of tasks for getting there. See that for more information.
-
 ## MP2: Antidote-Web Revamp
 
-Detailed design doc/plan TBD
+**Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/9
 
 ## MP3: Enhanced Endpoint Image Security and Build Automation
 
-Detailed design doc/plan TBD
+**Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/7
 
-## MP4: Opt-in Progress Tracking
+## MP4: Integration with External LMS
 
-Detailed design doc/plan TBD
+**Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/10
 
-## MP5: Contributions in the Browser
+## MP5: Next-Generation Self-medicate
 
-Detailed design doc/plan TBD
+**Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/11
 
 # Top-Level Execution Plan
 
