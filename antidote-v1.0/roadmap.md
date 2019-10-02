@@ -21,6 +21,7 @@ Each mini-project definition below contains:
 ## MP1: Syringe Re-architecture
 
 **Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/3
+
 **Discussion Forum** - https://community.networkreliability.engineering/c/antidote-platform-project-management/mp1-syringe-redesign
 
 Since Syringe is the heart and soul of Antidote, we need to first focus on re-thinking Syringe's architecture
@@ -33,6 +34,7 @@ based on our long-term plans for the whole project. This MP has a few goals for 
 ## MP2: Antidote-Web Revamp
 
 **Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/9
+
 **Discussion Forum** - https://community.networkreliability.engineering/c/antidote-platform-project-management/mp2-antidote-web-re-vamp
 
 Antidote-web was designed and written in a way that - while functional - has some big gaps with respect to commonly-held web and UX standards. This MP will accomplish a few things:
@@ -45,6 +47,7 @@ Antidote-web was designed and written in a way that - while functional - has som
 ## MP3: Enhanced Endpoint Image Security and Build Automation
 
 **Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/7
+
 **Discussion Forum** - https://community.networkreliability.engineering/c/antidote-platform-project-management/mp3-image-standardization
 
 Using containers for Antidote Endpoints has its advantages, but there are also some downsides, especially in the area of consistency and security. This MP hopes to secure all Endpoints by creating a consistent, light, and easy VM-based framework for all endpoints. The endgame here is to provide the inherent security of VMs while maintaining the developer experience that comes from Dockerfiles. Everything as-code, as it is today.
@@ -52,6 +55,7 @@ Using containers for Antidote Endpoints has its advantages, but there are also s
 ## MP4: Integration with External LMS
 
 **Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/10
+
 **Discussion Forum** - https://community.networkreliability.engineering/c/antidote-platform-project-management/mp4-integration-with-external-lms
 
 There are a number of Learning Management Systems (LMS) - some open source, some not - that would make sense to integrate with Antidote. Once MP1 is done, integrating external systems should be easier, and we may be able to provide some basic progress tracking functionality by integrating with one of these systems, as well as a slew of other advantages.
@@ -59,6 +63,7 @@ There are a number of Learning Management Systems (LMS) - some open source, some
 ## MP5: Next-Generation Self-medicate
 
 **Proposed Design and Implementation Plan**: https://github.com/nre-learning/proposals/pull/11
+
 **Discussion Forum** - https://community.networkreliability.engineering/c/antidote-platform-project-management/mp5-self-medicate-2-0
 
 Self-Medicate is a useful tool for not only deploying Antidote on a slim form factor, like a laptop, but is also a great companion tool for developing lessons. However, there are a few downsides to the current iteration:
