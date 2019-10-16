@@ -1,5 +1,7 @@
 ## Mission & Scope
 
+### Project Background
+
 NRE Labs grew out of the experiences of working network engineers who were quick to see the value of embracing infrastructure automation for the purpose of network reliability, but were challenged by the learning curve of doing so.
 
 Many automation tools were initially designed for compute and storage automation; in addition much of the work in this area has been done in open source projects, with varying degrees of commercialization. In parallel, the “SDN revolution” initially produced a widely held belief that network engineers would need to become coders or become obsolete.
@@ -16,7 +18,7 @@ We encourage lessons of all types relating to network reliability engineering an
 
 ### Scope
 
-The scope of the Project includes software development under an OSI-approved open source licence supporting the mission, including documentation, testing, integration and the creation of other artifacts that aid the development, deployment, operation or adoption of the open source software project.
+The scope of the Project includes software development under an OSI-approved open source licence supporting the mission, including documentation, testing, integration and the creation of other artifacts that aid the development, deployment, operation or adoption of NRE Labs.
 
 NRE Labs has two main components: the Platform (“Antidote”), and the Lessons. The Platform can serve a wide variety of purposes as a lesson delivery platform, and similarly, Lessons may be written for a wide variety of subjects which do not directly pertain to the Mission of the project. 
 
@@ -26,9 +28,9 @@ NRE Labs fully welcomes and encourages experimentation with both components, reg
 
 The Technical Community will be responsible for all aspects of oversight relating to coordinating the technical direction of the Project, including the architecture and projects needed to achieve the Mission and Scope of the Project; for approving project or system proposals (including, but not limited to, incubation, deprecation, and changes to a sub-project’s scope) in accordance with the Contribution Process and Inbound Code Review Policy to be developed, approved and maintained by the TC; coordinating Technical Community engagement with the end-user community with respect to requirements, high level architecture, implementation experiences, use cases, etc; working with other open source or open standards communities as needed; and establishing and enforcing community norms, workflows, issuing releases, and security issue reporting policies.
 
-Technical participation in the Project is open to anyone so long as they abide by the terms of this document and documents referenced herein. Technical Community meetings are conducted in English and are open to the public and recorded. The Technical Community generally will involve Contributors and Committers. Contributors include anyone in the Technical Community who contributes code, documentation, lessons or other artifacts to the Project. Committers are Contributors who have earned the ability to modify (“commit”) source code, documentation or other artifacts in a project’s repository. Each Project will ideally have at least 2 Committers. 
+Technical participation in the Project is open to anyone so long as they abide by the terms of this document and documents referenced herein. Technical Community meetings are conducted in English and are open to the public and documented for subsequent review. The Technical Community generally will involve Contributors and Committers. Contributors include anyone in the Technical Community who contributes code, documentation, lessons or other artifacts to the Project. Committers are Contributors who have earned the ability to modify (“commit”) source code, documentation or other artifacts in a project’s repository. Each Project will ideally have at least 2 Committers. 
  
-A Contributor may become a Committer by a majority approval of existing Committers, and at need may be removed by majority approval of the other existing Committers. Project contributors may request the removal of a Committer by notifying the Steering Committee, or the Committer can resign for their own reasons. The contributors to each Project will also select, by simple majority/greatest plurality vote, a Lead from among their committers, who will represent their Project on the Steering Committee. The Technical Community may add, refine and/or eliminate the roles of Contributors, and Committers, and create new Technical Community roles, as it sees fit.  
+A Contributor may become a Committer by a majority approval of existing Committers, and at need may be removed by majority approval of the other existing Committers. Project contributors may request the removal of a Committer by notifying the Steering Committee, or the Committer can resign for their own reasons. The Technical Community may add, refine and/or eliminate the roles of Contributors, and Committers, and create new Technical Community roles, as it sees fit.  
 
 The Technical Community will require a Leader to drive the development of the Project, including facilitation of Technical Community contributions to Project milestones and of resolution of any Community disagreements of a technical nature, eg relating to the architecture or achievement of technical milestones. The Leader will also represent the overall Technical Community within the Steering Committee. In brief, the Leader should be an excellent project manager and diplomat in addition to possessing technical vision and skills.
 
@@ -42,9 +44,9 @@ While the Project aims to operate as a consensus-based community, if any Technic
 
 ### Steering Committee
 
-The Steering Committee is responsible for setting the strategic direction of the Project in accordance with its Mission. It provides approval and oversight of the Project’s budget and disbursements, Policy documents and other legal matters, marketing, and other non-technical activities of the Project. Committee business will be conducted in English and will be recorded for public access. 
+The Steering Committee is responsible for setting the strategic direction of the Project in accordance with its Mission. It provides approval and oversight of the Project’s budget and disbursements, Policy documents and other legal matters, marketing, and other non-technical activities of the Project. Committee business will be conducted in English and will be documented for later review. 
 
-As a community-led open source project, the majority of work performed to develop and advance NRE Labs and its adoption is expected to be done by community members. This work may take the form of technical contributions as described in the Technical Community section, as well as non-technical forms of contribution, including feedback from Users, marketing, design, legal review and other activities. Where necessary expertise is not available in the community, the Project may contract with commercial entities, including consultants, for incremental support. In addition, the Project relies on commercial hosting platforms to make Lessons available to users. Commercial hosting of the development environment is also under consideration.
+As a community-led open source project, the majority of work performed to develop and advance NRE Labs and its adoption is expected to be done by community members. This work may take the form of technical contributions as described in the Technical Community section, as well as non-technical forms of contribution, including feedback from Users, marketing, design, legal review and other activities. Where necessary expertise is not available in the community, the Project may contract with commercial entities, including consultants, for incremental support. 
 
 The Steering Committee will be composed minimally of a Director, Treasurer, and the Technical Community Leader, and preferably also include a Curriculum Lead and a Marketing Lead, each as a Voter. The Committee may choose to admit additional members, such as a User Community representative, on either a voting or non-voting basis, under the Voting procedures described below.
 
@@ -82,20 +84,20 @@ Elections and any other voting decisions require a quorum of 50% of voting membe
 
 Amendments to this or Policy documents require a majority vote of the Steering Committee.
 
+
+#### Community Assets and Intellectual Property 
+
+The Platform is licensed under the Apache v2.0 license. Lessons contributed to the Project are published under CC BY 2.0. Project documentation, web and marketing content shall be published under Creative Commons license. The Project shall develop and own all Project repositories and social media accounts, and domain name registrations created by the Project. 
+
+Title to all trade or service marks used by the Project (“Project Trademarks”) is currently held by Juniper Networks. In the likely event that the Project joins an open source foundation or fiscal conservancy, Project Trademarks shall be transferred and assigned to that entity to hold on behalf of the Project. Any use of any Project Trademarks by participants in the Project or others shall be in accordance with the Trademark and Branding Policy.
+
+The Project may seek to integrate and contribute back to other open source projects (“Upstream Projects”). In such cases, the Project will conform to all license requirements of the Upstream Projects, including dependencies, leveraged by the Project.  Upstream Project code contributions not stored within the Project’s main code repositories shall comply with the contribution process and license terms for the applicable Upstream Project.
+
 ### Compliance with Policies and Licenses
 
 Contributors will comply with the policies adopted by the Steering Committee of NRE Labs. These policies may include:
 
-- Contributor License Agreement
-- Code of Conduct
-- Privacy Policy
+- [Contributor requirements] (https://antidoteproject.readthedocs.io/en/latest/contribute/index.html), including providing a Developer Certificate of Origin (DCO)
+- [Code of Conduct] (https://github.com/nre-learning/proposals/pull/2)
 - Terms of Use
 - Trademark and Branding Policy
-
-#### Community Assets and Intellectual Property 
-
-Title to all trade or service marks used by the Project (“Project Trademarks”) is currently held by Juniper Networks. In the likely event that the Project joins an open source foundation or fiscal conservancy, Project Trademarks shall be transferred and assigned to that entity to hold on behalf of the Project. Any use of any Project Trademarks by participants in the Project or others shall be in accordance with the Trademark and Branding Policy.
-
-The Project shall develop and own all Project repositories and social media accounts, and domain name registrations created by the Project. The Platform is licensed under the Apache v2.0 license. Lessons contributed to the Project are published under CC BY 2.0. Project documentation, web and marketing content shall be published under Creative Commons license. 
-
-The Project may seek to integrate and contribute back to other open source projects (“Upstream Projects”). In such cases, the Project will conform to all license requirements of the Upstream Projects, including dependencies, leveraged by the Project.  Upstream Project code contributions not stored within the Project’s main code repositories shall comply with the contribution process and license terms for the applicable Upstream Project.
