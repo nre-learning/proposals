@@ -97,7 +97,7 @@ The Project may seek to integrate and contribute back to other open source proje
 
 Contributors will comply with the policies adopted by the Steering Committee of NRE Labs. These policies may include:
 
-- [Contributor requirements] (https://antidoteproject.readthedocs.io/en/latest/contribute/index.html), including providing a Developer Certificate of Origin (DCO)
-- [Code of Conduct] (https://github.com/nre-learning/proposals/pull/2)
+- [Contributor requirements](https://antidoteproject.readthedocs.io/en/latest/contribute/index.html), including providing a Developer Certificate of Origin (DCO)
+- [Code of Conduct](https://github.com/nre-learning/proposals/pull/2)
 - Terms of Use
 - Trademark and Branding Policy
