@@ -1,4 +1,5 @@
-# MP1: Syringe Redesign
+# Antidote v1.0 Mini-Projects
+## MP1: Syringe Redesign
 
 The Antidote platform requires a concerted effort in order to get it to what
 could be considered a "1.0 architecture". As a key component to the platform, Syringe
@@ -9,37 +10,23 @@ The first portion of the document section can be read much like a design documen
 is to describe the intended "end state". The latter portion of the document will cover
 the concrete steps and milestones for getting there.
 
-First, an overview of the existing architecture, and a high-level overview of what we want
-to change.
+> **NOTE** - this is NOT intended to describe the final state of Syringe. v1.0 plans are just that - v1.0 plans.
+  This new design makes it a lot easier to make future changes to Syringe, which I'm sure there will be plenty
+  of.
 
+## Existing Architecture and Historical Design Requirements
 
+A year ago, the most important thing to do was to put **something** out there that showed the promise of
+curriculum-as-code and full automated on-demand lessons, so that the community could start rallying around (and start
+contributing to) a reference curriculum (NRE Labs). Since we knew NRE Labs was never going to be a revenue-generator,
+it was okay for us to make short-term decisions that would otherwise seem crazy - things like keeping all state in
+memory in a single binary that would occasionally crash and wipe its own slate.
 
-## Justification
-
-In short, the existing Syringe design is monolithic, and we're going to break it up into individual microservices. To facilitate this, I'm doing a good amount of prototyping, and I quickly realized that covering my discoveries and experiences here would make a good blog post series.
-
-### Monoliths are Okay
-
-The existing architecture was intentional - the name of the game initially was getting a PoC out quickly, so that the community could get their hands on the project ASAP. It was demonstrably easier at the time to just place all functionality and state into a single binary and deal with the downsides.
-
-On talking with others, it seems this isn't an uncommon choice - it's a tradeoff that may be worth considering if you have similar requirements. If, instead, I was building this for a business that required it to be stable from the outset, and couldn't tolerate a rewrite a year down the line, I would probably have made different decisions.
-
-A year ago, the most important thing to do was to put **something** out there that showed the promise of curriculum-as-code, and publishing a reference curriculum (NRE Labs) that the community could start contributing to. Since we knew NRE Labs was never going to be a revenue-generator, it was okay for us to make short-term decisions that would otherwise seem crazy - things like keeping all state in memory in a single binary that would occasionally crash and wipe its own slate.
-
-### Why Microservices?
-
-In making every design decision, it has to come back to your requirements. For us, the requirements for this phase of things are pretty clear:
-
-- Resilience is becoming more important. To create a stable platform for the community to rely on for learning infrastructure automation for the long-term, a 
-
-It's very trendy right now to move to a microservices application architecture (or at least talk about it) so to avoid getting lumped in with the bandwagon crowd, let me spend some time talking about some of the reasons we're doing it here.
-
-That said, we're clearly moving ahead with the rewrite to microservices, so here are some reasons:
-
-- A year ago our chief consideration was getting the project off the ground quickly. Now, our chief consideration is to make it easier for folks to contribute to the Antidote platform. Breaking it up into different components means a lot less for folks to wrap their heads around at a time.
-- The application is still pretty small, and the internal architecture is actually pretty compatible with the intended rewrite pattern with channels and NATS, so the pain is reduced. 
-
-## High-Level Architecture
+The existing monolithic architecture of Syringe was intentional - the name of the game initially was getting
+a PoC out quickly, so that the community could get their hands on the project ASAP. The important parts of Syringe
+weren't how well it scaled, or how easy it was to understand or extend - it was the abstraction offered
+to lesson authors, and how well it automated the setup of new lesson resources on behalf of the user. This is what
+conveyed the value of the platform, and scalability and stability frankly didn't really matter that much.
 
 The current Syringe architecture is quite simple. It all compiles to a single binary: `syringed`, but is logically
 built of two components - the scheduler, and the API server:
@@ -63,6 +50,25 @@ However, it also has some key disadvantages:
 - State is kept in-memory, so if Syringe is restarted, state is lost. This is why we currently kill
   all running lessons every time Syringe starts.
 - Fairly opaque - all monitoring is custom, and relies primarily on good logs.
+
+## High-Level Overview of v1.0 Design
+
+Like any decision involving technical debt, the time will come to pay up -and that time is now.
+A big indicator of this is that some of the current design considerations have changed.
+
+- Resilience is becoming more important. To create a stable platform for the community to rely on for learning infrastructure automation for the long-term, attention must be paid not only to general stability and scalability, but
+also the ability to inspect problems with the system.
+- A nontrivial portion of our community wants to work directly with Antidote for their own purposes, and doesn't plan to use the NRE Labs curriculum. Now, our chief consideration is to make it easier for folks to contribute to the Antidote platform. Breaking it up into different components means a lot less for folks to wrap their heads around at a time.
+
+There are a few guiding principles we are following in this design:
+
+- Proven, modular architectures like microservices for horizontal scale and choice.
+  - Consider our ambitions at every step and stand on the shoulders of giants
+- Existing software or services whenever possible so we can focus on differentiation
+  - Don’t reinvent the wheel.
+- Standard protocols and APIs for inter-component communication
+  - Again, use existing projects and APIs instead of reinventing our own. Also provides more flexibility
+
 
 The new Syringe architecture being proposed in this document can be summarized in the following points:
 
@@ -88,9 +94,31 @@ Message Queue = notifying components that they have some work to do
 
 The message queue + database is a common distributed systems model (see stackstorm).
 
-### Design Area - External State
+## Design Detail
+
+There are a number of design areas that should be explored in further detail.
+
+- Syringe API
+- External State
+- Microservices and Message Queue
+- Observability Instrumentation
+
+### Syringe API
+
+Stick with gRPC + REST? Or go with either pure REST or pure gRPC?
+
+https://medium.com/@vptech/complexity-is-the-bane-of-every-software-engineer-e2878d0ad45a
+
+Regardless of if gRPC or REST, a javascript client lib should be generated that antidote-web can use.
+
+### External State
+
+Data models will be pretty important. Can your protobuf-defined types be used in databases? How do folks model data in Go generally when it's going to be written to a database? Is this even something we care about that much?
 
 (https://cloud.google.com/sql/ https://github.com/go-pg/pg, or perhaps consul)
+
+Don't forget about migrations. When will we need them? How can we limit the need for them?
+https://godoc.org/github.com/go-pg/migrations
 
 Having state in an external component means we can allow everything else to be stateless.
 
@@ -109,6 +137,8 @@ Will also need a table for "locking" a livelesson. Any time an action is being t
 Need to figure out a way to represent a user ID that isn't bound to a specific platform. Like, we **think** we will
 use Discourse but we may use any of the platforms in MP6. The data model should account for this.
 
+
+
 ### Design Domain - Microservices and Message Queue
 
 Services:
@@ -118,10 +148,19 @@ Services:
 - Stats (influxdb)
 - Objective-checker
 
-NATS is the likely candidate for this. It's super simple and blazing fast.
+How do these communicate? Should consider this high level choice and state the direction we're going here and why
+https://solace.com/blog/experience-awesomeness-event-driven-microservices/
 
-------------------------
-We'll need a centralized messaging package for:
+If centralized messaging is chosen, NATS is the likely candidate for this. It's simple, fast, and built in Go (which Syringe is as well).
+
+
+
+
+https://nats.io/documentation/
+https://storageos.com/nats-good-gotchas-awesome-features/
+https://github.com/nats-io/not.go
+
+We'll need a [centralized messaging package](https://keepingitclassless.net/2019/10/keeping-nats-connections-dry-in-go/) for:
 - one place for services to publish messages to each other
 - centralized message definitions
 - centralized observability instrumentation for service-to-service comms. (will still need API to be instrumented)
@@ -132,7 +171,7 @@ and it returns a struct containing all of the channels needed for inter-service 
 keeps track of this struct and whenever it needs to send or receive data, that struct will have a channel for
 that need.
 
-I believe NATS is our best candidate here. It's simple, fast, and built in Go (which Syringe is as well).
+#### NATS Streaming?
 
 One decision we'll have to make is if we want to use plain old NATS, or if we think there's a case for
 [NATS Streaming](https://nats-io.github.io/docs/nats_streaming/intro.html). I don't think we need the extra
@@ -157,7 +196,16 @@ https://micro.mu
 Objective complettion is also an event that should eventually be sent out on the message queue.
 
 
+Events to predefine - these will be given subject names with a hierarchy that groups similar messages together.
+This will allow subscribers to receive the messages they want more easily.
+- Lesson started
+- Stage selected
+- Objective completion
+
+
 ### Design Area - Observability Instrumentation
+
+https://opentelemetry.io/
 
 Are users having problems?
 Corollary: monitoring components is easy, monitoring the end-to-end user experience is hard.
@@ -199,10 +247,9 @@ Spans
 
 **ALSO** - will definitely need to do better about reporting errors from Syringe. And as a side note, in production we should ensure these are surfacing to someone.
 
-### Design Area - Lesson Networking
+We didn't know about this issue https://github.com/nre-learning/nrelabs-curriculum/issues/274 because we don't have error reporting. Who knows how many folks this affects.
 
-The existing model works well but has shortcomings.
-In this project we should evaluate NetworkServiceMesh and figure out if it suits our needs.
+Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Syringe's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
 
 ## Mini-Project Milestones
 
@@ -213,7 +260,20 @@ in the order shown, and can be added to any platform release that is deemed suit
 This document will be updated as these milestones are achieved, with links to the Pull Request(s) and/or
 that satisfy them.
 
-### MP1.alpha - Move to go modules
+### MP1.-2 - Collapse syringed-mock
+
+Need to:
+- provide more control within Syringe - i.e. presentation paths should be provided as a "LivePresentation" or something like this
+- Since the API is its own service at this point, we can get rid of syringed-mock and simply deploy only the API microservice with prepopulated DB data that doesn't change since there's no scheduler.
+
+### MP1.-1 - Error Reporting?
+
+Is there not an open standard?
+If not we'll have to build a basic abstraction within Syringe and keep the vendor bits limited.
+
+https://sentry.io/
+
+### MP1.0 - Move to go modules
 
 ### MP1.1 - Move state to external database
 
@@ -225,8 +285,6 @@ that satisfy them.
 
 ### MP1.6 - Structured and centralized logging with Fluentd
 
-Will this also include error reporting?
-
 ### MP1.7 - Observability instrumentation
 
 ### MP1.8 - Syringe Security
@@ -236,3 +294,12 @@ measures should be taken, especially since not everyone will be running behind c
 
 Specifically things like rate limiting, source IP stuff, etc etc.
 
+## Misc Things
+
+These need to be done eventually, but could probably be addressed in separate projects.
+This may be removed from this document in the future.
+
+- **Auth and RBAC** You want to be able to do stuff like allow contributions
+from randos that are in an "unsupported realm"
+- **Lesson Networking** - The existing model works well but has shortcomings.
+In this project we should evaluate NetworkServiceMesh and figure out if it suits our needs.
