@@ -2,7 +2,15 @@
 
 > **WARNING What follows below is very temporary**. These are very rough notes taken over a long period of time from a variety of sources. I'm pushing it raw so that I can stop holding these scratchpads on my computer. Please do not view anything below as particularly accurate, or even needing to be done. This will get re-organized very soon.
 
+
+
 #### Misc Notes
+
+- The guacamole servlet functionality is the blackest box in the whole thing right now. I understand high level but tshooting is pretty impossible. This is still VERY MUCH in “PoC mode”
+- I’m not a web designer. I’m sure I’m violating some standards
+- I’m not a javascript developer, it’s possible I’m making it hard to extend unintentionally (i.e. might be better to use some kind of framework)
+
+Pop up something in the web UI if there’s a new blog
 
 User feedback right in the UI. Click this button or type in this box to tell us about a problem.
 Responses go to some kind of queue for filtering and triage. Includes session and request IDs
