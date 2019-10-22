@@ -2,7 +2,7 @@
 ## MP1: Syringe Redesign
 
 The Antidote platform requires a concerted effort in order to get it to what
-could be considered a "1.0 architecture". As a key component to the platform, Syringe
+could be considered a "v1.0 architecture". As a key component to the platform, Syringe
 requires a large portion of this focus. This document outlines the first mini-project
 involved in this effort, titled "MP1".
 
@@ -59,6 +59,7 @@ A big indicator of this is that some of the current design considerations have c
 - Resilience is becoming more important. To create a stable platform for the community to rely on for learning infrastructure automation for the long-term, attention must be paid not only to general stability and scalability, but
 also the ability to inspect problems with the system.
 - A nontrivial portion of our community wants to work directly with Antidote for their own purposes, and doesn't plan to use the NRE Labs curriculum. Now, our chief consideration is to make it easier for folks to contribute to the Antidote platform. Breaking it up into different components means a lot less for folks to wrap their heads around at a time.
+- Extending Syringe as simply as possible. API as well as messaging is a key part of this.
 
 There are a few guiding principles we are following in this design:
 
@@ -107,11 +108,44 @@ There are a number of design areas that should be explored in further detail.
 
 Stick with gRPC + REST? Or go with either pure REST or pure gRPC?
 
-https://medium.com/@vptech/complexity-is-the-bane-of-every-software-engineer-e2878d0ad45a
 
 Regardless of if gRPC or REST, a javascript client lib should be generated that antidote-web can use.
 
+Make sure the context passed in gets forwarded throughout the system - you're currently duplicating that functionality.
+https://golang.org/pkg/context/#Context
+
 ### External State
+
+- https://jbrandhorst.com/post/postgres/
+- https://medium.com/@vptech/complexity-is-the-bane-of-every-software-engineer-e2878d0ad45a
+
+One of the most fragile parts of the existing model is that all state is held in memory. This section outlines
+the new model, which is that Syringe will be back-ended by a Postgres database. This database will still be fairly
+simple, as there's not that much state to deal with, but we should still be clear about what state there is,
+and how it will be managed.
+
+Currently, all data models in Syringe are defined in protobuf files. This was done to automatically generate
+Go structs to be used throughout the codebase, as well as provide a basis for easily providing access to that
+data programmatically via gRPC. We also made use of the Lyft protobuf validation tool to provide a sort of
+"schema validation" functionality.
+
+While this do
+
+How to model data in Go that is both re-usable from an API as well as a database perspective?
+Protobufs are nice because they provide a single place to define models, but the lyft verify
+add-on is a bit smelly. There should be a transport-agnostic data modeling format that can be used
+for both use cases.
+
+How will database initialization be handled?
+
+<iframe width="560" height="315" src='https://dbdiagram.io/embed/5dae815e02e6e93440f27a53'> </iframe>
+
+A few notes about the above data model:
+
+- The `lock` field in the livelesson table allows us to ensure that only one change to a livelesson is being processed
+  at one time - the scheduler processes should use this to avoid contention.
+
+ In addition, since the scheduler will be writing to the database (as will the GC process), we need to make sure we can perform transactions on a per-UUID basis. Need to put more detailed thought into this part.
 
 Data models will be pretty important. Can your protobuf-defined types be used in databases? How do folks model data in Go generally when it's going to be written to a database? Is this even something we care about that much?
 
@@ -126,6 +160,7 @@ The database will primarily be used for state management, so we can use a common
 
 The API can easily be stateless because it's just designed to translate API calls into message queue messages essentially, or perform reads on teh database. It won't make direct writes to the DB. As a result, this can scale out easily.
 
+
 The only thing we'll have to figure out is if we need to import lesson definitions into the database. On one hand, I like the idea of pure curriculum-as-code - meaning the files on the filesystem, cloned from the Git repo, are the source of truth. However, this would mean we'd have to be make sure that we have the same version of the curriculum always in the right spot for all the microservices, which may be on different machines.
 
 On the other hand, we could do what StackStorm does with packs, which is to provide tooling to import a curriculum's "code" into database constructs. The microservices then access that data, rather than all of them accessing their own localized filesystems. The curriculum-as-code is still the original source of truth, but it's been placed into a centralized location for all to access.
@@ -139,47 +174,33 @@ use Discourse but we may use any of the platforms in MP6. The data model should 
 
 
 
-### Design Domain - Microservices and Message Queue
+### Microservices and Messaging
+
+In the new Syringe architecture, there are a number of services
 
 Services:
-- API
-- Scheduler
-- Garbage Collector
-- Stats (influxdb)
-- Objective-checker
+- `syringe-api`
+- `syringe-scheduler`
+- `syringe-gc`
+- `syringe-stats`
+- `syringe-checker`
 
-How do these communicate? Should consider this high level choice and state the direction we're going here and why
-https://solace.com/blog/experience-awesomeness-event-driven-microservices/
+These will all be discussed in detail below.
 
-If centralized messaging is chosen, NATS is the likely candidate for this. It's simple, fast, and built in Go (which Syringe is as well).
+![](images/messaging.jpg)
+
+These services need to communicate with each other to be effective - the chief use case is for the API service to
+inform the scheduler service that there's work to do (e.g. spin up kubernetes resources for a new lesson). To
+facilitate this, we'll use the [NATS messaging platform](https://nats.io/), as the nature of Syringe's inter-service
+communication aligns well with the publish-subscribe messaging model that NATS fits nicely into. NATS is also written
+in Go, and built to be extremely fast, and simple.
+
+> I believe we can get away with plain NATS, and avoid using [NATS Streaming](https://nats-io.github.io/docs/nats_streaming/intro.html).
+> The only service that absolutely must receive messages is the scheduler, and we'll
+> not only be running multiple parallel processes for this service, each scheduler service will handle incoming
+> requests in a goroutine, which means there will always be something to process incoming messages.
 
 
-
-
-https://nats.io/documentation/
-https://storageos.com/nats-good-gotchas-awesome-features/
-https://github.com/nats-io/not.go
-
-We'll need a [centralized messaging package](https://keepingitclassless.net/2019/10/keeping-nats-connections-dry-in-go/) for:
-- one place for services to publish messages to each other
-- centralized message definitions
-- centralized observability instrumentation for service-to-service comms. (will still need API to be instrumented)
-
-Assuming we use NATS, I like the idea of [using native Go channels](https://github.com/nats-io/nats.go#using-go-channels-netchan)
-to communicate between services. So, this package should offer a function where you pass in the config,
-and it returns a struct containing all of the channels needed for inter-service communication. Each service
-keeps track of this struct and whenever it needs to send or receive data, that struct will have a channel for
-that need.
-
-#### NATS Streaming?
-
-One decision we'll have to make is if we want to use plain old NATS, or if we think there's a case for
-[NATS Streaming](https://nats-io.github.io/docs/nats_streaming/intro.html). I don't think we need the extra
-features offered there, but am open to arguments otherwise. One thing that will help is figuring out the code impact - is there a difference in how we connect to NATS, or is this just an add-on to the server side of things?
-
-I don't *think* we need NATS streaming - one reason is that each worker is designed to receive a message and spawn a goroutine to handle it, so we can scale within each running worker process, and we can also always spin up more than one worker process for additional responsiveness (and resiliency)
-
----------------
 
 
 Message queue design. As long as there's a component to translate events to achievements
@@ -187,31 +208,105 @@ then we will pick them up. If not then we will configure the messages to time ou
 
 The design allows us to enable or disable features simply by starting the relevant processes to listen on the message queue or the Syringe API. If we don't want to export to influx, we simply don't enable that process. If we don't want to enable gamification, don't start the translator process. All messages like this will be sent with a TTL, so if nothing is there to pick messages up off the queue, they'll disappear after a while.
 
-The scheduler can also scale out as long as we ensure only one of the instances of the scheduler takes a request off of the queue (i.e. no fan-out). However, the scheduler should still direct all incoming requests into a goroutine so that each individual scheduler process can handle multiple processes concurrently, just like it does today. In addition, since the scheduler will be writing to the database (as will the GC process), we need to make sure we can perform transactions on a per-UUID basis. Need to put more detailed thought into this part.
 
-> Maybe we could use NATS for this - when a stage is activated, a message will be sent to subscribers, which will include a set of `syringe-verify` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
+These are the core services, but we might want to develop a service that listens for known Syringe events to do some external integration, so having a messaging system that we can just send events into without caring about subscribers is nice. It's then up to the subscribers on what they do with that information.
 
-https://micro.mu
+If centralized messaging is chosen, [NATS](https://nat.io/documentation/) is the likely candidate for this.
+It's simple, fast, and built in Go (which Syringe is as well).
 
-Objective complettion is also an event that should eventually be sent out on the message queue.
+> [This blog post](https://storageos.com/nats-good-gotchas-awesome-features/) does a good job of covering the pros and cons of using NATS.
+
+Since we're using NATS, we need to first understand the types of messages or "events" that will be sent to NATS, and subsequently received by other services:
+
+Events:
+1. `NewLiveLesson`
+2. `StageChangeLiveLesson`
+3. `DeleteLiveLesson`
+4. `LiveLessonReady`
+5. `LiveLessonFailed`
+6. `ObjectiveComplete`
+
+Next, we'll describe each microservice, and discuss how they behave. They will all need to read from the database,
+but we'll also mention below which ones need to also write to the database, as well as which services subscribe to
+which events, and in which manner. We'll also mention which services publish which messages.
+
+> these will be given subject names with a hierarchy that groups similar messages together. This will allow subscribers to receive the messages they want more easily.
+
+#### `syringe-api`
+
+Writes to DB: No
+Subject Subscriptions: None
+Queue Subcriptions: None
+Publishes: 1,2
+
+#### `syringe-scheduler`
+
+Writes to DB: Yes
+Subject Subscriptions: None
+Queue Subcriptions: 1,2
+Publishes: 4,5
+
+#### `syringe-gc`
+
+Writes to DB: Yes
+Subject Subscriptions: None
+Queue Subcriptions: None
+Publishes: 3
+
+#### `syringe-stats`
+
+Writes to DB: No
+Subject Subscriptions: None
+Queue Subcriptions: 1,3,4
+Publishes: None
+
+#### `syringe-checker`
+
+Writes to DB: No
+Subject Subscriptions: None
+Queue Subcriptions: 1,2,3
+Publishes: 6
+
+We'll need a [centralized messaging package](https://keepingitclassless.net/2019/10/keeping-nats-connections-dry-in-go/) to give the various Syringe services a single place for:
+- Event Definitions
+- Constructor functions for setting up [communication channels](https://github.com/nats-io/nats.go#using-go-channels-netchan)
+- Observability instrumentation (will still need API to be instrumented)
+
+The blog post above was written precisely as a prototype for how this will be laid out in Syringe, so please
+use that blog post as guidance for how this package should be built.
+
+We **should** be able to implement this comms package before even breaking Syringe up - as the scheduler
+and api portion of Syringe today communicate directly and those events are maintained in code. We could replace
+those with a comms package before breaking the services apart.
+
+Further Reading:
+- https://solace.com/blog/experience-awesomeness-event-driven-microservices/
+
+### Objective Verification
+
+Maybe we could use NATS for this - when a stage is activated, a message will be sent to subscribers, which will include a set of `syringe-verify` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
 
 
-Events to predefine - these will be given subject names with a hierarchy that groups similar messages together.
-This will allow subscribers to receive the messages they want more easily.
-- Lesson started
-- Stage selected
-- Objective completion
+### Observability and Logging
+
+There are two questions we currently don't have very good answers to:
+
+- **Are users having problems?** - Monitoring components is easy, monitoring the end-to-end user experience is hard.
+  We don't currently have a good way to know how many of today's launched lessons were launched without issues. This
+  is obviously not ideal.
+
+- **If they are, what can we even do about it?** - In the 0.01% of cases where users find a way to get feedback to
+  us, all of the context is lost. Someone might find a way to tell us that such and such a lesson isn't working, but
+  reproducing the problem is almost always difficult - many issues, especially with the content, are intermittent.
 
 
-### Design Area - Observability Instrumentation
 
 https://opentelemetry.io/
+https://opentracing.io/specification/
 
-Are users having problems?
-Corollary: monitoring components is easy, monitoring the end-to-end user experience is hard.
+https://github.com/nats-io/not.go
 
-If they are, what can we even do about it?
-Corollary: In the 0.01% of cases where users find a way to get feedback to us, all of the context is lost.
+
 
 When to record spans? Receipt? Send? Both?
 
@@ -221,12 +316,12 @@ Threads:
 - System observability - Tracing from web front-end all the way through every syringe microservice. Allows us to leverage inherent cardinality based from initial session and request ID.
 
 https://peter.bourgon.org/blog/2017/02/21/metrics-tracing-and-logging.html
-https://opentracing.io/specification/
 
 Not easy to debug stuff
--It is really, really hard to see a user’s path through the system right now with flat logs. Debugging problems is nearly impossible right now, because of two main insufficiencies
+- It is really, really hard to see a user’s path through the system right now with flat logs. Debugging problems is nearly impossible right now, because of two main insufficiencies
 -Not enough context is given for each log message.
 -Flat logging won’t give us any insight whatsoever into how well the solution is scaling. This will be especially true if we fix Problem #1, as we’ll invest time into breaking Syringe apart into microservices but with flat logs we’ll be operating blind.
+
 Solution:
 -Logging is still good, but it needs to be structured, and it needs to be done in such a way that all the context is preserved, so we can filter on a UUID, for instance
 -Instrument the code for distributed tracing so that we can export traces to standardized distributed tracing tools like Jaeger and Honeycomb. This will allow us to take a piece of cardinal data (i.e. UUID) and see the end-to-end flow throughout the system.
