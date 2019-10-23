@@ -11,8 +11,7 @@ is to describe the intended "end state". The latter portion of the document will
 the concrete steps and milestones for getting there.
 
 > **NOTE** - this is NOT intended to describe the final state of Syringe. v1.0 plans are just that - v1.0 plans.
-  This new design makes it a lot easier to make future changes to Syringe, which I'm sure there will be plenty
-  of.
+> The point of this effort, in large part, is to make it easier to make future changes to Syringe.
 
 ## Existing Architecture and Historical Design Requirements
 
@@ -53,106 +52,65 @@ However, it also has some key disadvantages:
 
 ## High-Level Overview of v1.0 Design
 
-Like any decision involving technical debt, the time will come to pay up -and that time is now.
-A big indicator of this is that some of the current design considerations have changed.
+There are a few things that we have learned since we started the project, and together, they're driving the
+need for a new architecture:
 
-- Resilience is becoming more important. To create a stable platform for the community to rely on for learning infrastructure automation for the long-term, attention must be paid not only to general stability and scalability, but
-also the ability to inspect problems with the system.
-- A nontrivial portion of our community wants to work directly with Antidote for their own purposes, and doesn't plan to use the NRE Labs curriculum. Now, our chief consideration is to make it easier for folks to contribute to the Antidote platform. Breaking it up into different components means a lot less for folks to wrap their heads around at a time.
-- Extending Syringe as simply as possible. API as well as messaging is a key part of this.
+- Usage of NRE Labs is growing rapidly, and we're encountering use cases that will rely more heavily on its
+  availability. An architecture that tolerates failures and scales seamlessly is needed.
+- Increasingly, our community wants to work with Antidote directly, and it's important that we invest more time in
+  making it not only easy to understand, but also easy to operate, and easy to extend.
 
-There are a few guiding principles we are following in this design:
+This new Syringe architecture - which will be outlined in detail in this document - can be summarized in
+the following points:
 
-- Proven, modular architectures like microservices for horizontal scale and choice.
-  - Consider our ambitions at every step and stand on the shoulders of giants
-- Existing software or services whenever possible so we can focus on differentiation
-  - Don’t reinvent the wheel.
-- Standard protocols and APIs for inter-component communication
-  - Again, use existing projects and APIs instead of reinventing our own. Also provides more flexibility
-
-
-The new Syringe architecture being proposed in this document can be summarized in the following points:
-
-- Breaking up the logical services currently offered within `syringed` into separate microservices.
-- Move state to an external database of some kind (TBD)
-- Add better logging and observability instrumentation to aid in better production debugging.
+- Breaking up the logical services currently offered within `syringed` into stateless, horizontally
+  scalable microservices, connected via standard communication platforms like pub/sub messaging, gRPC, and REST.
+- Manage all state via an external database
+- Add better logging and observability instrumentation to aid in better production debugging
 
 ![](images/syringe_new.png)
 
+The "message bus + database" design is a popular and well-understood distributed systems pattern. Projects
+like [StackStorm](https://github.com/StackStorm/st2) use this architecture to get the best of both worlds.
+In short:
+
+- The database is used for managing state, so that all services can be stateless, and can operate without worrying
+  about stepping on each other (database will handle locking and transactions).
+- The message bus is used to notify various components that they have work to do. Syringe services will listen
+  for certain message types so they know when they need to perform certain operations (pub/sub).
+
 This design has some key advantages over the current approach:
 
-- Better resilience - no “one syringe”
-- Easier to extend - just pop a new service on the message bus. In the above diagram, we note that other
-  non-Syringe software like StackStorm can listen on this event bus and further extend the capabilities of
-  the platform.
-- Easier to reason about, maintain, and contribute to individual services.
-- Totally stateless services - all state managed by a proper database. This not only means managing state
-  in the right way, it also means that Syringe microservices can scale horizontally, aiding in overall
-  system resilience.
-
-Database = centralized and external state management so the microservices can be light and stateless
-Message Queue = notifying components that they have some work to do
-
-The message queue + database is a common distributed systems model (see stackstorm).
+- **Better Resilience** - There's now no “one syringe”. All services are stateless, so the important services
+  like the scheduler or the API can be horizontally scaled for HA.
+- **More Extensible** - The events sent on the bus are well-known, and any software can subscribe to
+  those events without Syringe even knowing about it.
+- **Easier to Understand** - It will be easier to reason about, maintain, and contribute to individual services.
 
 ## Design Detail
 
-There are a number of design areas that should be explored in further detail.
+Now that the high-level design is out of the way, there are a number of design areas that should be
+explored in further detail.
 
-- Syringe API
-- External State
-- Microservices and Message Queue
-- Observability Instrumentation
+> Note that these are not ordered in any way - the sections to follow merely explore a specific part of
+> the new design for clarity. Read to the end of this document for an execution plan.
 
 ### Syringe API
 
-Stick with gRPC + REST? Or go with either pure REST or pure gRPC?
+#### Questions
 
-
-Regardless of if gRPC or REST, a javascript client lib should be generated that antidote-web can use.
-
-Make sure the context passed in gets forwarded throughout the system - you're currently duplicating that functionality.
-https://golang.org/pkg/context/#Context
+- Stick with gRPC + REST? Or go with either pure REST or pure gRPC?
+- Regardless of if gRPC or REST, a javascript client lib should be generated that antidote-web can use.
+- Make sure the [context](https://golang.org/pkg/context/#Context) passed in gets forwarded throughout the system - you're currently duplicating that functionality.
 
 ### External State
 
 - https://jbrandhorst.com/post/postgres/
 - https://medium.com/@vptech/complexity-is-the-bane-of-every-software-engineer-e2878d0ad45a
 
-One of the most fragile parts of the existing model is that all state is held in memory. This section outlines
-the new model, which is that Syringe will be back-ended by a Postgres database. This database will still be fairly
-simple, as there's not that much state to deal with, but we should still be clear about what state there is,
-and how it will be managed.
+One of the most fragile parts of the existing model is that all state is held in memory. As part of this project, we'll be moving all tracked state to a proper database. This will result in 
 
-Currently, all data models in Syringe are defined in protobuf files. This was done to automatically generate
-Go structs to be used throughout the codebase, as well as provide a basis for easily providing access to that
-data programmatically via gRPC. We also made use of the Lyft protobuf validation tool to provide a sort of
-"schema validation" functionality.
 
-While this do
-
-How to model data in Go that is both re-usable from an API as well as a database perspective?
-Protobufs are nice because they provide a single place to define models, but the lyft verify
-add-on is a bit smelly. There should be a transport-agnostic data modeling format that can be used
-for both use cases.
-
-How will database initialization be handled?
-
-<iframe width="560" height="315" src='https://dbdiagram.io/embed/5dae815e02e6e93440f27a53'> </iframe>
-
-A few notes about the above data model:
-
-- The `lock` field in the livelesson table allows us to ensure that only one change to a livelesson is being processed
-  at one time - the scheduler processes should use this to avoid contention.
-
- In addition, since the scheduler will be writing to the database (as will the GC process), we need to make sure we can perform transactions on a per-UUID basis. Need to put more detailed thought into this part.
-
-Data models will be pretty important. Can your protobuf-defined types be used in databases? How do folks model data in Go generally when it's going to be written to a database? Is this even something we care about that much?
-
-(https://cloud.google.com/sql/ https://github.com/go-pg/pg, or perhaps consul)
-
-Don't forget about migrations. When will we need them? How can we limit the need for them?
-https://godoc.org/github.com/go-pg/migrations
 
 Having state in an external component means we can allow everything else to be stateless.
 
@@ -161,18 +119,93 @@ The database will primarily be used for state management, so we can use a common
 The API can easily be stateless because it's just designed to translate API calls into message queue messages essentially, or perform reads on teh database. It won't make direct writes to the DB. As a result, this can scale out easily.
 
 
+
+This section outlines
+the new model, which is that Syringe will be back-ended by a Postgres database. This database will still be fairly
+simple, as there's not that much state to deal with, but we should still be clear about what state there is,
+and how it will be managed.
+
+
+#### Current Tracked State
+
+All state is currently tracked in memory, and can be summarized in the list below:
+
+- [KubeLabs](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/scheduler/scheduler.go#L63)
+- [LiveLessons](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/api/exp/server.go#L38)
+- [VerificationTasks](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/api/exp/server.go#L43)
+- [GcWhiteList](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/scheduler/scheduler.go#L61)
+
+There are a few things that should be said about the above:
+
+- We will not need the VerificationTasks to be tracked in the new model. All lessons that have an optional objectives
+  will be constantly watched for objective verification.
+- The relationship between KubeLabs and LiveLessons should be re-evaluated. Mostly, LiveLesson is just an API-friendly
+  version of KubeLab, which is where we are currently placing all created kubernetes objects. The very first
+  consideration to make is if this storage is even necessary - it's likely we don't even need kubelab at all, and
+  livelesson can be made to be much simpler by only containing fields that are relevant to running state.
+
+#### Model Definition
+
+Currently, all data models in Syringe are defined in protobuf files. This was done to automatically generate
+Go structs to be used throughout the codebase, as well as provide a basis for easily providing access to that
+data programmatically via gRPC. We also made use of the [`protoc-gen-validate`](https://github.com/envoyproxy/protoc-gen-validate) tool to provide basic validation functionality (ensuring strings are a certain length, etc).
+
+This works fairly well, and the go-pg translations from native Go types to Postgres data types seems straightforward.
+These native types are almost always way generous (i.e. text vs varchar) so we should do two things to compensate for this:
+
+- We can always override via [tags that we can inject right in the protobuf definition](https://github.com/favadi/protoc-go-inject-tag).
+- The Lyft validation tags can also add restrictions to the 
+
+Using the above two methods, we can keep not only the database types, but also their constraints, right in the
+protobuf definition files, rather than maintain two separate model locations.
+
+This intersects with a common design consideration when building database applications that also have an API.
+Sometimes it's necessary to build one model for the database - often much more verbose - and a second for the
+API that's been trimmed down or transformed in some way to help the API stay lean. In the case of Syringe, I am
+leaning towards the position that this is not necessary, and that we can get away with a single model for both
+purposes. There are two main reasons for this:
+
+- There's not much that we will want to store in the database but not make available directly through the API
+- For corner cases where there's a type that has some fields that we want to store in the database but we don't want to be shown in the API, this is easy enough to handle on a case-by-case basis for now.
+
+In short, I don't currently see a need to maintain two separate models, which would add unneceessary complexity, as well as the need to maintain a translation boundary between the two.
+
+New database schema for Syringe:
+
+<iframe width="560" height="315" src='https://dbdiagram.io/embed/5dae815e02e6e93440f27a53'> </iframe>
+
+A few notes about the above data model:
+
+- The `lock` field in the livelesson table allows us to ensure that only one change to a livelesson is being processed
+  at one time - the scheduler processes should use this to avoid contention.
+
+In addition, since the scheduler will be writing to the database (as will the GC process), we need to make sure we can perform transactions on a per-UUID basis. Need to put more detailed thought into this part.
+
+The [`go-pg`](https://github.com/go-pg/pg) is a very popular ORM for Go, and we'll be using it for database operations.
+
+
+
+
 The only thing we'll have to figure out is if we need to import lesson definitions into the database. On one hand, I like the idea of pure curriculum-as-code - meaning the files on the filesystem, cloned from the Git repo, are the source of truth. However, this would mean we'd have to be make sure that we have the same version of the curriculum always in the right spot for all the microservices, which may be on different machines.
 
-On the other hand, we could do what StackStorm does with packs, which is to provide tooling to import a curriculum's "code" into database constructs. The microservices then access that data, rather than all of them accessing their own localized filesystems. The curriculum-as-code is still the original source of truth, but it's been placed into a centralized location for all to access.
-
-Maybe a "syrctl import" command is needed to facilitate this.
-
-Will also need a table for "locking" a livelesson. Any time an action is being taken on a livelesson, such as changing stage, or starting a new one, etc - a row should be added to this table with the value of the livelesson. Before starting any activity, this table is consulted, and if a value exists, do not take the action. Might be worth considering queuing actions but it's probably best to not do this, and outright reject them at the API layer if a livelesson is locked.
-
-Need to figure out a way to represent a user ID that isn't bound to a specific platform. Like, we **think** we will
-use Discourse but we may use any of the platforms in MP6. The data model should account for this.
+On the other hand, we could do what StackStorm does with packs, which is to provide tooling to import a curriculum's "code" into database constructs. The microservices then access that data, rather than all of them accessing their own localized filesystems. The curriculum-as-code is still the original source of truth, but it's been placed into a centralized location for all to access. Maybe a "syrctl import" command is needed to facilitate this.
 
 
+
+
+
+#### Questions
+
+- The UUID for users is generated on clients, but we probably don't want to use that for the primary key.
+  How to prevent collisions here? Should we try?
+- How will database initialization be handled?
+- Need to figure out a way to represent a user ID that isn't bound to a specific platform. Like, we **think** we will
+  use Discourse but we may use any of the platforms in MP6. The data model should account for this.
+- Don't forget about [migrations]. When will we need them? How can we limit the need for them? (Maybe we just
+  wipe out and re-initialize the database between versions - we don't need to save anything). If we go this route,
+  we should write the Syringe version during initialization, and each service should check this version on startup
+  to ensure it's the same as their version, and if not, quit.
+- TODO - add security controls here. We should be storing state to do rate-limiting of some kind.
 
 ### Microservices and Messaging
 
@@ -200,7 +233,9 @@ in Go, and built to be extremely fast, and simple.
 > not only be running multiple parallel processes for this service, each scheduler service will handle incoming
 > requests in a goroutine, which means there will always be something to process incoming messages.
 
-
+When the API sends a message to the scheduler to spin up a lesson, we should leverage
+[request reply](https://nats-io.github.io/docs/developer/concepts/reqreply.html) to ensure a scheduler
+handled it. If this fails, that means no scheduler is available and the API should mark the livelesson as failed.
 
 
 Message queue design. As long as there's a component to translate events to achievements
@@ -234,7 +269,7 @@ which events, and in which manner. We'll also mention which services publish whi
 
 #### `syringe-api`
 
-Writes to DB: No
+Writes to DB: Yes
 Subject Subscriptions: None
 Queue Subcriptions: None
 Publishes: 1,2
