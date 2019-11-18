@@ -1,5 +1,4 @@
-# Antidote v1.0 Mini-Projects
-## MP1: Syringe Redesign
+# Antidote v1.0 Mini-Project 1 - Platform Redesign
 
 The Antidote platform requires a concerted effort in order to get it to what
 could be considered a "v1.0 architecture". As a key component to the platform, Syringe
@@ -11,12 +10,13 @@ is to describe the intended "end state". The latter portion of the document will
 the concrete steps and milestones for getting there.
 
 > **NOTE** - this is NOT intended to describe the final state of Syringe. v1.0 plans are just that - v1.0 plans.
-> The point of this effort, in large part, is to make it easier to make future changes to Syringe.
+> The point of this effort, in large part, is to make it easier to make future changes to Syringe, and not to get
+> all those changes in now.
 
 ## Existing Architecture and Historical Design Requirements
 
 A year ago, the most important thing to do was to put **something** out there that showed the promise of
-curriculum-as-code and full automated on-demand lessons, so that the community could start rallying around (and start
+curriculum-as-code and fully automated on-demand lessons, so that the community could start rallying around (and start
 contributing to) a reference curriculum (NRE Labs). Since we knew NRE Labs was never going to be a revenue-generator,
 it was okay for us to make short-term decisions that would otherwise seem crazy - things like keeping all state in
 memory in a single binary that would occasionally crash and wipe its own slate.
@@ -25,7 +25,9 @@ The existing monolithic architecture of Syringe was intentional - the name of th
 a PoC out quickly, so that the community could get their hands on the project ASAP. The important parts of Syringe
 weren't how well it scaled, or how easy it was to understand or extend - it was the abstraction offered
 to lesson authors, and how well it automated the setup of new lesson resources on behalf of the user. This is what
-conveyed the value of the platform, and scalability and stability frankly didn't really matter that much.
+conveyed the value of the platform, and scalability and stability frankly didn't really matter that much at the time.
+The more important mission was to prove the viability of the project as a whole, and nail the abstraction we offered
+to lesson builders.
 
 The current Syringe architecture is quite simple. It all compiles to a single binary: `syringed`, but is logically
 built of two components - the scheduler, and the API server:
@@ -50,7 +52,7 @@ However, it also has some key disadvantages:
   all running lessons every time Syringe starts.
 - Fairly opaque - all monitoring is custom, and relies primarily on good logs.
 
-## High-Level Overview of v1.0 Design
+## High-Level Overview of Antidote v1.0 Design
 
 There are a few things that we have learned since we started the project, and together, they're driving the
 need for a new architecture:
@@ -64,9 +66,9 @@ This new Syringe architecture - which will be outlined in detail in this documen
 the following points:
 
 - Breaking up the logical services currently offered within `syringed` into stateless, horizontally
-  scalable microservices, connected via standard communication platforms like pub/sub messaging, gRPC, and REST.
-- Manage all state via an external database
-- Add better logging and observability instrumentation to aid in better production debugging
+  scalable microservices, connected via standard communication platforms like pub/sub messaging and HTTP.
+- Manage all state via an external database. All microservices will be totally stateless.
+- Add observability instrumentation to aid in better production debugging and proactive awareness of user experience
 
 ![](images/syringe_new.png)
 
@@ -87,13 +89,38 @@ This design has some key advantages over the current approach:
   those events without Syringe even knowing about it.
 - **Easier to Understand** - It will be easier to reason about, maintain, and contribute to individual services.
 
+## Deprecation of "Syringe" Name
+
+For a while, we've referred to the platform as "Antidote", even though Antidote isn't really a tangible
+thing. We've gotten around this by saying that it's an umbrella term, much like Openstack, and the tangible
+subcomponents, namely `antidote-web` and `syringe`, make this up.
+
+However, given that Syringe contains the vast majority of the functionality of the platform, having a separate
+name, while certainly cool and well-aligned to the theme of the project, offers nothing but confusion.
+So, before work begins on this project, we will be renaming Syringe to conform to the Antidote terminology, which
+is already the primary terminology we use when explaining the platform to newcomers anyways. Here's a list of
+things we'll want to do to facilitate this change.
+
+- The `antidote-web` repository will remain unaffected, as it is already appropriately named.
+- The `syringe` repository will be renamed `antidote-core`, to reflect the nature of the services that will be
+  housed there.
+- The microservices that run within the Antidote core platform will be prefixed with `antidote-`, to further
+  align them with the Antidote name.
+- The `antidote` repository will be renamed `antidote-docs`, and will be updated to replace all references to
+  Syringe as needed.
+
+With these changes, all platform elements will fall under the name "Antidote", even across repositories.
+`antidote-web` is just another service of the Antidote platform, as is `antidote-api`, and so on.
+
+Throughout the rest of this document, we'll be using the term "Antidote", instead of Syringe, unless we're discussing
+existing/legacy functionality. If a particular service is being discussed, it will be called out by name, such
+as `antidote-web`, or `antidote-api`.
+
 ## Design Detail
 
-Now that the high-level design is out of the way, there are a number of design areas that should be
-explored in further detail.
-
-> Note that these are not ordered in any way - the sections to follow merely explore a specific part of
-> the new design for clarity. Read to the end of this document for an execution plan.
+Now that the high-level design is out of the way, there are a number of specific design areas that should be
+explored in further detail (in no particular order - the end of this document will overview a proposed execution
+plan).
 
 ### Syringe API
 
@@ -106,99 +133,49 @@ We originally selected gRPC so we could use streaming RPCs to do further integra
 NATS under the hood next, we don't need this at the API level anymore. So that's one pro-gRPC argument off
 the table.
 
-https://nordicapis.com/when-to-use-what-rest-graphql-webhooks-grpc/
+There are plenty of [articles](https://nordicapis.com/when-to-use-what-rest-graphql-webhooks-grpc/) that explain
+some of the high-level differences between various programmability options, but here's a list thats relevant to
+this project
 
-Pros for REST
-- Supporting media natively instead of through URLs
-- REST/HTTP APIs are more widely understood than gRPC/protobuf, which makes our contributor pool larger.
-  Remember, making this project more accessible is a chief concern for this redesign.
-- Our load balancer will understand this well.
+| Pros for REST  | Pros for gRPC |
+| ------------- | ------------- |
+| Supporting media natively instead of through URLs  | Go has great gRPC and protobuf tooling, and Syringe already has a lot built to use this already. |
+| REST/HTTP APIs are more widely understood than gRPC/protobuf, which makes our contributor pool larger. Remember, making this project more accessible is a chief concern for this redesign.  | gRPC and protobufs are much more efficient than traditional HTTP APIs with JSON |
+| More mature load balancer support  | --- |
 
-Pros for gRPC
-- Go has great gRPC and protobuf tooling, and Syringe already has a lot built to use this already.
-
-We **could** use https://github.com/grpc/grpc-web in javascript but I am still not sure how stable that is,
-I've heard it's not quite ready for primetime. This is on top of the server-side issues we have with gRPC in Syringe
-today.
+> There is a new [standard for gRPC in Javascript](https://github.com/grpc/grpc-web), but it's still new, and I've heard it's not quite ready for primetime.
 
 At this point, though I love gRPC and protobuf, and I will continue to use it in my other projects, it seems
 that it's not as useful in this project. Fortunately, Go has really good built-in HTTP support. However, to
 properly replace what we already have and set us up for success in the long-term, we'll need a few things.
 
-- swagger definition (the existing protobuf definitions can serve as a starting point)
-- automatically built client and server functions (the existing functions for gRPC can serve as a starting point)
-- built-in routing that's well integrated with the previous point (read on for a note on go-swagger, as it has built-in routing)
-- Auto-generated swagger docs and endpoint for the swagger UI - this is actually already being done in the existing grpc-gateway implementation so I'm sure this could be re-used.
+- **An OpenAPI-compatible swagger definition** (the existing protobuf definitions can serve as a source of inspiration)
+- **Auto-generated client and server functions** - it *seems* like [go-swagger](https://github.com/go-swagger/go-swagger) is the current preference for generating server and client code in Go for OpenAPI/Swagger. That repo's README has some notes on why [swagger-codegen](https://github.com/swagger-api/swagger-codegen) is a less desirable choice for this. The [docs](https://goswagger.io/faq/) for `go-swagger` will also be useful.
+- **Built-in routing** - go-swagger has built-in routing that's simple and makes use of the already very good net/http support in Go. Ideally the routing would be fully automated so we can hook it up to the automatically generated code instead of statically matching paths to functions.
+- **Auto-generated swagger docs** - (and endpoint for the swagger UI) - this is actually already being done in the existing grpc-gateway implementation so this just needs to be re-implemented in the new API service.
+- **Dedicated API types** - With the new separate data model for the underlying database types, we can make the API way more simple. There's a lot in the current API that just doesn't need to be there because it's the only place we're storing Syringe types in the code. This will allow us to make the API much more simple and as a result, move towards stability.
 
-We'll first need to develop an OpenAPI-compatible `swagger.yml` definition for Syringe's API.
+Fortunately, it looks like [Netlify](https://github.com/netlify/open-api) has followed much of the above, so
+we can borrow some ideas from their implementation for this.
 
-Then we'll want to set up code generation in the Makefile for both server and client functions.
-It **seems** like [go-swagger](https://github.com/go-swagger/go-swagger) is the current preference for generating
-server and client code in Go for OpenAPI/Swagger. That repo's README has some notes on why
-[swagger-codegen](https://github.com/swagger-api/swagger-codegen) is a less desirable choice for this.
+While much of the functionality in general might remain the same, we should take the opportunity to really think through the API as if we were writing it from scratch, because we essentially are. Since we aren't using one model for everything, our data models for the API can be exactly purpose-built, so every field should be considered thoughtfully.
 
-https://goswagger.io/faq/ - docs
+In addition, some big lessons-learned that should be reflected in the new design of the API:
 
-https://github.com/netlify/open-api seems like a good example we can follow.
+- We are providing for facilities in the database for generating and storing session IDs within the platform, instead of leaving it up to the web client (which is currently how its done). So, the new API should have an endpoint for getting a token/uuid, and it's only good for so long. This is also where you can bake in some security - it's like an auth endpoint but without username/passwords, but it will have rate-limiting (number of UUIDs/IP address, and number of lessons per uuid, etc)
+- The lesson optional objective verification portion of the API can probably just die. The data model for querying livelesson state should provide the functionality to see what objectives, if any, of a lesson have been satisfied.
 
+### External State Management in a Database
 
-
-
-
-
-
-Summary:
-
-- Protobufs need to be rewritten from scratch to only include information that **needs** to be in the API
-- Choose to go with pure gRPC or stay with gRPC+REST. Or just do REST. Either way, the API documentation and various client libs needs to be autogenerated.
-
-
-
-With the new separate data model for the underlying database types, we can make the API way more simple.
-There's a lot in the current API that just doesn't need to be there because it's the only place we're storing Syringe types in the code.
-
-we'll also be re-building the
-protobuf definitions to only include that which is necessary for the API going forward; the API functions will be
-responsible for translating Syringe models into the protobuf-generated types and vice-versa.
-
-This will allow us to make the API much more simple and as a result, move towards stability.
-
-#### Questions
-
-- Stick with gRPC + REST? Or go with either pure REST or pure gRPC?
-- Regardless of if gRPC or REST, a javascript client lib should be generated that antidote-web can use.
-- Make sure the [context](https://golang.org/pkg/context/#Context) passed in gets forwarded throughout the system - you're currently duplicating that functionality.
-
-### External State
-
-One of the most fragile parts of the existing model is that all state is held in memory. As part of this project,
-we'll be moving all tracked state to a proper database. This will let us not only keep the services much simpler,
-it also helps coordinate work across multiple service replicas, where appropriate.
-
-This database will still be fairly simple, as there's not that much state to deal with, but we should
-still be clear about what state there is, and how it will be managed.
-
-#### Current Tracked State
-
-Syringe loads lesson resources like lessons and collections into memory when it starts, from the source YAML files.
-However, once loaded, these don't change, they're just referenced. However, there are some fields in the API server
-as well as the scheduler that do change; this is what is meant by the "state" Syringe tracks. These current instances are summarized below:
+One of the most fragile parts of the existing model is that all state is held in memory. On startup, Syringe loads lesson resources like lessons and collections into memory from the source YAML files. Once loaded, these don't change, they're just referenced. However, there are some fields in the API server as well as the scheduler that are used for ongoing state management, specifically to track what lessons are live, and what resources were created within each. Below is a list of all locations within Syringe where state like this is currently managed:
 
 - [KubeLabs](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/scheduler/scheduler.go#L63)
 - [LiveLessons](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/api/exp/server.go#L38)
 - [VerificationTasks](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/api/exp/server.go#L43)
 - [GcWhiteList](https://github.com/nre-learning/syringe/blob/e903877229b48d600b06e397454be3225d657956/scheduler/scheduler.go#L61)
 
-There are a few things that should be said about the above:
-
-- We will not need the VerificationTasks to be tracked in the new model. All lessons that have an optional objectives
-  will be constantly watched for objective verification, and the results will be posted to the relevant LiveLesson
-  record.
-- KubeLab is **smelly**. We probably don't need to be storing every Kubernetes object we create, so KubeLab is also
-  probably going away. LiveLesson should be re-created as a first class citizen instead of a rendered view of
-  something else.
-
-#### New `db` Package and Model Definitions
+As part of this project, we'll be moving all tracked state to a proper database. This will let us not only keep
+the services much simpler, it also helps coordinate work across multiple service replicas, where appropriate.
 
 Currently, all data models in Syringe are defined as protobuf messages. This was initially done so we could
 use a central resource to define the types in use throughout the codebase while simultaneously providing
@@ -206,86 +183,63 @@ a basis for providing access to that data programmatically via gRPC. We also mad
 [`protoc-gen-validate`](https://github.com/envoyproxy/protoc-gen-validate) tool to provide basic validation
 functionality (ensuring strings are a certain length, etc) when importing these resources from files.
 
-While this model worked well for the first year of the project, it has a few problems:
-
-- There are a lot of fields present in our protobuf definitions that don't need to be part of the API - they're
-  only there because the protobuf definitions are currently our central resource for all important types like
-  Lessons and Collections. This makes the API overly complex.
+While this model worked well for the first year of the project, it has a few problems, the largest of which is that
+there are a lot of fields present in our protobuf definitions that don't need to be part of the API - they're
+only there because the protobuf definitions are currently our central resource for all important types like
+Lessons and Collections. This makes the API overly complex because these models need to satisfy both internal
+and external needs.
 
 It's not uncommon in software like this to have a dedicated set of models appropriate for database interactions,
 and then a separate set of models for use in the API, which keeps the API much more simple and stable. The
 database models are able to contain much more granular data, and can be refactored without impacting the API much
 more easily. This is what we'll do in Syringe.
 
-We'll develop a new `db` package, which will have two roles:
+To facilitate this, we'll develop a new `db` package, which will require two efforts:
 
-- Maintain the full set of database models as Go structs
-- Centralized database interaction functionality so that we don't have database calls all over the codebase
+- Define and maintain [the full set of database models](https://github.com/go-pg/pg/wiki/Model-Definition)
+  as native Go structs. These will be dedicated for this purpose. The API will be responsible for retrieving
+  these types via `db` functions and translating to API types.
+- Centralized database interaction functionality so that we don't have database calls all over the codebase.
+  Since we're treating the `db` package as its own entity that doesn't have to worry about the API, we can be verbose
+  here. Functionality to do standard CRUD updates for all types makes sense, as well as maybe other helper functions
+  that might be necessary for the various Antidote core services.
 
-> The database models will likely need to be decorated with tags appropriate to the ORM in use. We'll be using
-Postgres, as it is an incredibly stable and well-supported database, and the [`go-pg`](https://github.com/go-pg/pg)
-is a very popular ORM for Go. The initial models will be built to work with these technologies primarily.
+The database models will likely need to be decorated with tags appropriate to the ORM in use. We'll be using Postgres, as it is an incredibly stable and well-supported database, and the [`go-pg`](https://github.com/go-pg/pg) is a very popular ORM for Go. The initial models will be built to work with these technologies primarily.
 
-We are working on [a new database schema](https://dbdiagram.io/embed/5dae815e02e6e93440f27a53) for Syringe (currently WIP), and a full diagram will be embedded here once finished.
-
+<!-- We are working on [a new database schema](https://dbdiagram.io/embed/5dae815e02e6e93440f27a53) for Antidote (currently WIP), and a full diagram will be embedded here once finished. -->
 <!-- <iframe width="560" height="315" src='https://dbdiagram.io/embed/5dae815e02e6e93440f27a53'></iframe> -->
 
-A few notes about the above data model:
+The set of database models is likely to go through future changes as it continues to be used. In most applications, schema changes should be managed carefully, so that when the software changes, the database can be migrated seamlessly. Usually this is done by maintaining schema versions in code as ORM structures, as well as migration functions to convert the database to the new format. In our case, this will not be necessary; the new database schema really contains two types of data:
 
-- The `lock` field in the livelesson table allows us to ensure that only one change to a livelesson is being processed
-  at one time - the scheduler processes should use this to avoid contention.
-- There's a table for curriculum resource definitions like lessons and collections. We are **not** moving away from
-  the curriculum-as-code model. The curriculum as represented in Git is still the source of truth, but rather than
-  having each service maintain their own locally cloned Git repository (a sure operational headache), a new
-  `syrctl import` command will be developed to import a curriculum into the database, and all services will
-  just read from there. This is identical to what [StackStorm](https://github.com/StackStorm/st2) does with Packs.
+- **Curriculum Resources** - these will be pulled directly from the filesystem on import
+- **State Tracking** - running lessons, sessions, etc
 
-We will need to redo the import logic, especially validation.
-https://medium.com/@apzuk3/input-validation-in-golang-bc24cdec1835
+> Regarding the curriculum resources now being stored in the database - we are **not**  moving away from the curriculum-as-code model. The curriculum as represented in Git is still the source of truth, but rather than having each service maintain their own locally cloned Git repository (a sure operational headache), a new `syrctl import` command will be developed to import a curriculum into the database, and all services will just read from there. This is identical to what [StackStorm](https://github.com/StackStorm/st2) does with Packs.
 
+None of this data is actually important enough to spend time on migration scripts to preserve it across versions. State tracking is very temporary, and curriculum resources are populated from a Git repository on the filesystem on import. Operationally, it's not only feasible but in fact far easier to simply recreate the database when moving between versions of Syringe, than it would be to maintain versioned schema definitions and migration scripts. So, Syringe will store its version into the `antidote_meta` table when initialized, and each service will check this value on startup to ensure it matches their own version. When a new version of Syringe is deployed, a one-time database initialization should be run, which will include the import of curriculum resources.
 
-This database schema is likely to go through future changes as it continues to be used Most of the time, schema
-changes should be managed carefully, so that when the software changes, the database can be migrated seamlessly.
-Usually this is done by maintaining schema versions in code as ORM structures, as well as migration functions to
-convert the database to the new format. In our case, this will not be necessary; the new database schema really
-contains two types of data:
+This document will not drill into the actual schema definitions themselves, as these will be done as part of the proposed implementation in a pull request. However, at a high level, the following tables can be expected to be part of this:
 
-- **Curriculum resources** - these will be pulled directly from the filesystem on import
-- **State tracking** - running lessons, etc
+- **antidote_meta** - k/v table for storing information about the version of Antidote that is working with this data
+- **antidote_resource_collections** - storing collection definitions. This should only be written to on curriculum load - the rest of the time it will just be read.
+- **antidote_resource_lessons** - storing lesson definitions. This should only be written to on curriculum load - the rest of the time it will just be read.
+- **antidote_state_livelessons** - tracking active lessons, including any optional objectives, and their status
+- **antidote_state_sessions** - Antidote will generate unique session IDs via the API, and store that session data here. We don't track specific users, but we should be storing enough data about the requestor to prohibit some of the more basic forms of abuse, like source IP (v4/v6). This is no more than is already being collected, and this will only be used for purposes of abuse prevention.
 
-None of this data is actually all that important. State tracking is very temporary, and curriculum resources are
-populated from a Git repository on the filesystem on import. Operationally, it's not only feasible but way easier
-to simply recreate the database when moving between versions of Syringe, than it would be to maintain versioned
-schema definitions and migration scripts. So, Syringe will store its version into the database when initialized,
-and each service will check this value on startup to ensure it matches their own version. When a new version of
-Syringe is deployed, a one-time database initialization should be run, which will include the import of curriculum
-resources.
+> VerificationTasks and KubeLab as mentioned at the top of this section are no longer needed, and do not have a place here.
 
-Important resource when defining models
-https://github.com/go-pg/pg/wiki/Model-Definition
+Once these models and standard CRUD are in place, the functionality around importing curriculum resources needs to be re-vamped, especially regarding validation. The existing tool for validating protobufs will no longer be relevant, so a [new validator library](https://github.com/go-playground/validator) should be used here. In addition to validating import, we should [add tooling to create resources](https://github.com/nre-learning/syringe/issues/84)  based from these models. It shouldn't be too hard to build this once, and then the wizard will iterate through all available fields in a model to produce the desired UX. Creating new resources is currently one of the worst experiences in the platform, so we should spend some time thoughtfully working through the UX of the client.
 
-
-#### Reading
+Helpful reading:
 
 - [How I use Postgres with Go](https://jbrandhorst.com/post/postgres/)
 - [Simple API backed by PostgresQL, Golang and gRPC](https://medium.com/@vptech/complexity-is-the-bane-of-every-software-engineer-e2878d0ad45a)
 
-#### Questions
+### Microservices and Pub/Sub Messaging
 
-- Since the scheduler, API and GC services will be writing to the database, we need to make sure
-  we can perform transactions on a per-UUID basis. Need to put more detailed thought into this part.
-- The UUID for users is generated on clients, but we probably don't want to use that for the primary key.
-  How to prevent collisions here? Should we try?
-- How will database initialization be handled?
-- Need to figure out a way to represent a user ID that isn't bound to a specific platform. Like, we **think** we will
-  use Discourse but we may use any of the platforms in MP6. The data model should account for this.
-- Add security controls here. We should be storing state to do rate-limiting of some kind.
+Where Syringe historically has performed all functionality within a single running process, in the new Syringe
+architecture, there are a number of services that will run as separate processes, each performing a specific task:
 
-### Microservices and Messaging
-
-In the new Syringe architecture, there are a number of services
-
-Services:
 - `syringe-api`
 - `syringe-scheduler`
 - `syringe-gc`
@@ -296,38 +250,13 @@ These will all be discussed in detail below.
 
 ![](images/messaging.jpg)
 
-These services need to communicate with each other to be effective - the chief use case is for the API service to
-inform the scheduler service that there's work to do (e.g. spin up kubernetes resources for a new lesson). To
-facilitate this, we'll use the [NATS messaging platform](https://nats.io/), as the nature of Syringe's inter-service
-communication aligns well with the publish-subscribe messaging model that NATS fits nicely into. NATS is also written
-in Go, and built to be extremely fast, and simple.
+These services need to communicate with each other to be effective. As an example, the API service receives a request, it will need to inform the scheduler service that there's work to do (e.g. spin up kubernetes resources for a new lesson). To facilitate this, we'll use the [NATS messaging platform](https://nats.io/), as the nature of Syringe's inter-service communication aligns well with the publish-subscribe messaging model that NATS provides. NATS is also written in Go, and built to be extremely fast, and simple. [This blog post](https://storageos.com/nats-good-gotchas-awesome-features/) does a good job of covering the pros and cons of using NATS.
 
-> I believe we can get away with plain NATS, and avoid using [NATS Streaming](https://nats-io.github.io/docs/nats_streaming/intro.html).
-> The only service that absolutely must receive messages is the scheduler, and we'll
-> not only be running multiple parallel processes for this service, each scheduler service will handle incoming
-> requests in a goroutine, which means there will always be something to process incoming messages.
+> [NATS Streaming](https://nats-io.github.io/docs/nats_streaming/intro.html) is a project that's designed to fit on top of plain NATS to provide some message reliablity features like buffering when there are no subscribers. While this sounds nice, I believe we can get away with plain NATS, and avoid using NATS Streaming, which will ensure that we don't start relying on it as a crutch. All services that absolutely must receive messages will have multiple copies, and will handle all incoming messages in a goroutine, meaning there will always be a subscriber available to receive incoming messages. As an added protective measure, we may look to leverage [request reply](https://nats-io.github.io/docs/developer/concepts/reqreply.html); as an example, if the API sends a message to the scheduler and it's not acknowledged, we can mark a livelesson as failed in the database. Combined, these tools should allow us to avoid relying on message buffering solutions and keep the messaging layer that much simpler.
 
-When the API sends a message to the scheduler to spin up a lesson, we should leverage
-[request reply](https://nats-io.github.io/docs/developer/concepts/reqreply.html) to ensure a scheduler
-handled it. If this fails, that means no scheduler is available and the API should mark the livelesson as failed.
+Antidote will maintain a set of Events, modeled as Go structs but encoded as JSON on the wire, which will be
+published onto NATS:
 
-
-Message queue design. As long as there's a component to translate events to achievements
-then we will pick them up. If not then we will configure the messages to time out and they just go nowhere. Allows us to just plug things into the bus to enable the functionality
-
-The design allows us to enable or disable features simply by starting the relevant processes to listen on the message queue or the Syringe API. If we don't want to export to influx, we simply don't enable that process. If we don't want to enable gamification, don't start the translator process. All messages like this will be sent with a TTL, so if nothing is there to pick messages up off the queue, they'll disappear after a while.
-
-
-These are the core services, but we might want to develop a service that listens for known Syringe events to do some external integration, so having a messaging system that we can just send events into without caring about subscribers is nice. It's then up to the subscribers on what they do with that information.
-
-If centralized messaging is chosen, [NATS](https://nat.io/documentation/) is the likely candidate for this.
-It's simple, fast, and built in Go (which Syringe is as well).
-
-> [This blog post](https://storageos.com/nats-good-gotchas-awesome-features/) does a good job of covering the pros and cons of using NATS.
-
-Since we're using NATS, we need to first understand the types of messages or "events" that will be sent to NATS, and subsequently received by other services:
-
-Events:
 1. `NewLiveLesson`
 2. `StageChangeLiveLesson`
 3. `DeleteLiveLesson`
@@ -335,184 +264,252 @@ Events:
 5. `LiveLessonFailed`
 6. `ObjectiveComplete`
 
-Next, we'll describe each microservice, and discuss how they behave. They will all need to read from the database,
-but we'll also mention below which ones need to also write to the database, as well as which services subscribe to
-which events, and in which manner. We'll also mention which services publish which messages.
+Each event will get its own NATS subject. This will make it a lot easier to integrate external systems into Antidote,
+as a third-party software system will only need to subscribe to the relevant subject, and a copy of each event will
+be sent to them. It also makes it easy to disable functionality - since messages are not preserved if there are no
+subscribers, we can disable functionality by simply not starting the relevant service.
 
-> these will be given subject names with a hierarchy that groups similar messages together. This will allow subscribers to receive the messages they want more easily.
+Next, we'll describe each Antidote service, and discuss how they behave as it pertains to messaging (Note that each
+service will perform DB reads):
+
+> This document won't specify subject names, but during implementation, these should be written with a hierarchy that groups similar messages together. This will allow subscribers to receive the messages they want more easily.
 
 #### `syringe-api`
 
-Writes to DB: Yes
-Subject Subscriptions: None
-Queue Subcriptions: None
-Publishes: 1,2
+| []()  |  |
+| ------------- | ------------- |
+| Writes to DB          | Yes |
+| Subject Subscriptions | None |
+| Queue Subcriptions    | None |
+| Publishes             | 1,2 |
 
 #### `syringe-scheduler`
 
-Writes to DB: Yes
-Subject Subscriptions: None
-Queue Subcriptions: 1,2
-Publishes: 4,5
+| []()  |  |
+| ------------- | ------------- |
+| Writes to DB          | Yes |
+| Subject Subscriptions | None |
+| Queue Subcriptions    | 1,2 |
+| Publishes             | 4,5 |
 
 #### `syringe-gc`
 
-Writes to DB: Yes
-Subject Subscriptions: None
-Queue Subcriptions: None
-Publishes: 3
+| []()  |  |
+| ------------- | ------------- |
+| Writes to DB          | Yes |
+| Subject Subscriptions | None |
+| Queue Subcriptions    | None |
+| Publishes             | 3 |
 
 #### `syringe-stats`
 
-Writes to DB: No
-Subject Subscriptions: None
-Queue Subcriptions: 1,3,4
-Publishes: None
+| []()  |  |
+| ------------- | ------------- |
+| Writes to DB          | No |
+| Subject Subscriptions | 1,3,4 |
+| Queue Subcriptions    | None |
+| Publishes             | None |
 
 #### `syringe-checker`
 
-Writes to DB: No
-Subject Subscriptions: None
-Queue Subcriptions: 1,2,3
-Publishes: 6
+| []()  |  |
+| ------------- | ------------- |
+| Writes to DB          | No |
+| Subject Subscriptions | 1,2,3 |
+| Queue Subcriptions    | None |
+| Publishes             | 6 |
 
-We'll need a [centralized messaging package](https://keepingitclassless.net/2019/10/keeping-nats-connections-dry-in-go/) to give the various Syringe services a single place for:
+We'll need a centralized `comms` package to give the various Antidote services a single place for:
 - Event Definitions
 - Constructor functions for setting up [communication channels](https://github.com/nats-io/nats.go#using-go-channels-netchan)
-- Observability instrumentation (will still need API to be instrumented)
+- Observability Instrumentation (covered in a following section)
 
-The blog post above was written precisely as a prototype for how this will be laid out in Syringe, so please
-use that blog post as guidance for how this package should be built.
+> [This blog post](https://keepingitclassless.net/2019/10/keeping-nats-connections-dry-in-go/) was written precisely as a prototype for how this will be laid out in Antidote, so please use it as guidance for how this package should be built. There's one possible exception to this, which is that the use of channels may get in the way of tracing instrumentation, so the use of normal functions for pub/sub is probably fine.
 
-We **should** be able to implement this comms package before even breaking Syringe up - as the scheduler
-and api portion of Syringe today communicate directly and those events are maintained in code. We could replace
-those with a comms package before breaking the services apart.
+We'll also want a StackStorm sensor that listens for all events, and registers each within StackStorm as a trigger
+that we can then integrate with other systems.
+
+> We **should** be able to implement this comms package before even breaking Antidote up - as the `scheduler` and `api` portion of Antidote today communicate directly and those events are maintained in code. We could replace those with a `comms` package before breaking the services apart. However, the value of doing this is debatable, since we're not planning to run Antidote in prod until all of these milestones are finished.
 
 Further Reading:
+
+- https://building.echo.co.uk/microservices-opinions-and-advice/
 - https://solace.com/blog/experience-awesomeness-event-driven-microservices/
 
 ### Objective Verification
 
-Maybe we could use NATS for this - when a stage is activated, a message will be sent to subscribers, which will include a set of `syringe-verify` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
+This is a feature we've played with in prior versions of the platform, and technically works, but will become a much more reliable feature
+with the presence of a pub/sub messaging system.
 
+When a stage is activated, a message will be sent to subscribers, which will include a set of `syringe-checker` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
 
-### Observability and Logging
+### Observability Instrumentation
 
-There are two questions we currently don't have very good answers to:
+When it comes to operating an Antidote-based service like NRE Labs, there are two questions we
+currently don't have very good answers to:
 
-- **Are users having problems?** - Monitoring components is easy, monitoring the end-to-end user experience is hard.
-  We don't currently have a good way to know how many of today's launched lessons were launched without issues. This
-  is obviously not ideal.
+- **Are users having problems?** - We just have no insight at all into the current user experience beyond testing it ourselves in real-time. There are several issues [like this one](https://github.com/nre-learning/nrelabs-curriculum/issues/274) that, while seemingly rare, do significantly affect the user's ability to start a lesson, and it's impossible to know exactly how often this happens.
 
-- **If they are, what can we even do about it?** - In the 0.01% of cases where users find a way to get feedback to
-  us, all of the context is lost. Someone might find a way to tell us that such and such a lesson isn't working, but
-  reproducing the problem is almost always difficult - many issues, especially with the content, are intermittent.
+- **If they are, what can we even do about it?** - In the 0.01% of cases where users find a way to get feedback to us, all of the context is lost. Someone might find a way to tell us that such and such a lesson isn't working, but reproducing the problem is almost always difficult - many issues, especially with the content, are intermittent.
 
+The only thing we have right now to even hope to solve these problems are a smattering of log messages throughout
+the codebase, most of which are not written meaningfully, and do not contain anything remotely like the correct
+amount of context necessary to identify or reproduce the problem. Currently, the Syringe logs are rarely even
+inspected, due to the fact that most of what we care about is highly context-dependent. Having everyone's
+experience bleeding together in a single log file is not conducive to drilling into a specific problem.
+If we're going to break Syringe up into microservices, this problem will be made even worse, because it will be
+not just one pointless log file, but rather several that we'll have to ignore.
 
+In nearly every case, what we've been trying to get logs to help us with is to help us understand a user's path through the system, and how they fared along that journey. We've wanted to be able to identify bottlenecks across the entire system, and be able to provide this end-to-end view, applied to a very specific interaction, that may have taken place days ago. These can be best described as request-scoped events, as described in [this excellent blog post](https://peter.bourgon.org/blog/2017/02/21/metrics-tracing-and-logging.html).
 
-https://opentelemetry.io/
-https://opentracing.io/specification/
+On clarifying this need, it becomes obvious that [distributed tracing](https://opentracing.io/docs/overview/what-is-tracing/) is much better suited to solve this problem. Spans with rich metadata through tags and event timing through span logs will get us 99% of the way there. Leave standard logging for really catastrophic stuff like crashes.
 
-https://github.com/nats-io/not.go
+For maximum compatibility, we'll make sure that the tracing implementation we select is compliant with
+[OpenTracing](https://opentracing.io/). This is supported by a number of open source
+collectors like Zipkin and Jaeger, as well as commercial and hosted offerings. Since a large number of inter-service
+interactions will take place via NATS, it makes sense to use [not.go](https://github.com/nats-io/not.go),
+but other implementations may also be appropriate, such as one that is best suited for initializing spans
+for inbound API requests. Antidote-web will also have to have instrumentation added, and the Syringe API will
+have to be aware of this and be ready to pick up that rich inbound context.
 
+Once this is done, an administrator should be able to take a few key identifiers, like session ID, lesson ID, etc.
+and be able to see in detail, every interaction throughout the entire system, with specific in-span event logs
+that show what's taking place inside each component.
 
-We shouldn't care too much about which collector is used, but we will definitely want to build documentation on how to collect Syringe spans, and that will need to use a particular collector.
+The [OpenTracing best practices guide](https://opentracing.io/docs/best-practices/) should be regularly consulted
+to ensure we're adding this instrumentation in an idiomatic way.
 
-Jaeger seems like the right choice but the adaptive sampling has me weirded out. Will need to make sure we set a reasonable default for unsampled collection, [seems like this is a minimum setting](
-https://www.jaegertracing.io/docs/1.6/sampling/#adaptive-sampler).
+> As part of this effort, the creation of additional tooling, external to Antidote, may be necessary to create
+some basic alerting or error reporting functionality. Some collectors seem to offer this, but it will also be
+necessary to automate the forwarding of certain undesirable states to an administrator. This will likely take
+place within the `antidote-ops` repository, but this combination of an OpenTracing collector and any additional
+alerting tooling on top will be relevant to any that wish to use Antidote.
 
-Failing that, Zipkin looks simple enough though it's Java
-https://epsagon.com/blog/zipkin-or-jaeger-the-best-open-source-tools-for-distributed-tracing/
+As a result of this effort, it is likely that the vast majority of traditional log messages will be removed
+from the system. Those that are less context-bound, and more relevant to the operation of the platform will remain
+but will be cleaned up and kept very relevant.
 
-
-
-When to record spans? Receipt? Send? Both?
-
-This is MOSTLY a syringe thing, but will also include changes in antidote-web
-Threads:
-- Component observability - Better structured logging (I haven’t been the most sanitary here) with option to send to remote collector
-- System observability - Tracing from web front-end all the way through every syringe microservice. Allows us to leverage inherent cardinality based from initial session and request ID.
-
-https://peter.bourgon.org/blog/2017/02/21/metrics-tracing-and-logging.html
-
-Not easy to debug stuff
-- It is really, really hard to see a user’s path through the system right now with flat logs. Debugging problems is nearly impossible right now, because of two main insufficiencies
--Not enough context is given for each log message.
--Flat logging won’t give us any insight whatsoever into how well the solution is scaling. This will be especially true if we fix Problem #1, as we’ll invest time into breaking Syringe apart into microservices but with flat logs we’ll be operating blind.
-
-Solution:
--Logging is still good, but it needs to be structured, and it needs to be done in such a way that all the context is preserved, so we can filter on a UUID, for instance
--Instrument the code for distributed tracing so that we can export traces to standardized distributed tracing tools like Jaeger and Honeycomb. This will allow us to take a piece of cardinal data (i.e. UUID) and see the end-to-end flow throughout the system.
--OpenTracing is overwhelmingly the goto standard for distributed tracing, and is supported by numerous backends, including Jaeger, Honeycomb, Zipkin and more. https://opentracing.io/specification/
-
-Traces will begin on receipt of requests, either in GRPC (below) or rest-gateway if possible
--https://medium.com/@masroor.hasan/tracing-infrastructure-with-jaeger-on-kubernetes-6800132a677
--https://github.com/grpc-ecosystem/go-grpc-middleware/
--NATS can also be instrumented: https://github.com/nats-io/not.go
-
-
-Spans
--Api-to-scheduler
--Scheduler-to-st2
--Etc - need to build a trace diagram on the whiteboard and copy it here.
--Links
-
-
-**ALSO** - will definitely need to do better about reporting errors from Syringe. And as a side note, in production we should ensure these are surfacing to someone.
-
-We didn't know about this issue https://github.com/nre-learning/nrelabs-curriculum/issues/274 because we don't have error reporting. Who knows how many folks this affects.
-
-Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Syringe's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
+Reading:
+- https://nats.io/blog/nats-tracing/
+- https://opentracing.io/docs/overview/spans/
 
 ## Mini-Project Milestones
 
-This mini-project is too large to take place within a single platform release. To facilitate ongoing stability,
-and create logical steps to the end-goal, a set of milestones is listed below. These milestones should be done
-in the order shown, and can be added to any platform release that is deemed suitable.
+To facilitate community involvement, and create a logical breakdown of steps to the end goal, a set of milestones is listed below. Where the sections above described the ideal end-state, the below sections will dive a little bit into how to get there, with the added structure of time/order. Each section will have some slightly more detailed but still high-level guiding points that the implementation for each should keep in mind.
 
-This document will be updated as these milestones are achieved, with links to the Pull Request(s) and/or
-that satisfy them.
+This document will be updated as these milestones are achieved, with links to the Pull Request(s) and/or Issues that address them. It should be noted that while much prototyping was performed in order to hash out the details of the design that we've covered thus far, there are still some questions that will need to be answered at the time of implementation. Please read the sections below as well as any linked pull requests or issues for more detail on this - these are all important considerations to work out prior to calling any work "done".
 
-### MP1.-2 - Collapse syringed-mock
+> **NOTE** - if you are interested in working on one of these milestones, please **first** reach out via one of the issues linked below, or through any of our other communication mechanisms. Many of these efforts are fairly complicated, and it's difficult to capture everything that must take place within this design, and it's highly unlikely that your work will be merged without some initial conversation to coordinate things. So please do not just start working on something without first discussing with us.
 
-Need to:
-- provide more control within Syringe - i.e. presentation paths should be provided as a "LivePresentation" or something like this
-- Since the API is its own service at this point, we can get rid of syringed-mock and simply deploy only the API microservice with prepopulated DB data that doesn't change since there's no scheduler.
+### MP1.X - Create new `db` package
 
-### MP1.-1 - Error Reporting?
+- **Create database models and functions** - Make sure we perform transactions or [locks on a per-row basis](https://www.postgresql.org/docs/9.1/explicit-locking.html) when performing writes for safety. The scheduler processes should also use this to avoid contention when moving between stages
 
-Is there not an open standard?
-If not we'll have to build a basic abstraction within Syringe and keep the vendor bits limited.
+- **Resource Import/Creation Re-Vamp** - Re-vamp import logic, relocating it from the `api` package to the new `db` package. The database models will likely need to be decorated with additional tags for validation purposes (string length, integer bounds, etc etc). [go-playground/validator](https://github.com/go-playground/validator) seems useful, but it might be better to try to build validation with [jsonschema](https://github.com/alecthomas/jsonschema) which will not only accomplish the purposes here, but will also allow us to, export a full set of jsonschema definitions that a web UI can use to create resources as well. We should also build a simple command-line tool for initializing a database. It will lock the entire database, drop all tables, and rebuild it.
 
-https://sentry.io/
+- **Resource creation tooling** - Once the above validation functionality is in place, we should [add tooling to create resources](https://github.com/nre-learning/syringe/issues/84) from these models, located in the new client binary. Try to make use of the jsonschema information made possible in the previous step, setting the stage to do the same thing from a Web UI later. https://github.com/nre-learning/syringe/issues/84
 
-### MP1.0 - Move to go modules
+- **Remove syringed-mock** - since the API is its own service at this point, we can get rid of syringed-mock and simply deploy only the API microservice with prepopulated DB data that doesn't change since there's no scheduler. Please don't assume this is true, please test this is true before removing syringed-mock, and preferably also update the docs. We should be able to pre-populate the database with some mocked livelesson data, start only the API service, and it will provide access to a "running lesson" in the same way syringed-mock does today.
 
-### MP1.1 - Move state to external database
+### MP1.X - Break out `antidote-gc`
 
-### MP1.2 - Break out garbage collection
+https://github.com/nre-learning/syringe/issues/99
 
-### MP1.3 - Break out TSDB
+This should be simple - the GC functionality doesn't need to talk to other services, it just needs access to the
+database. So the functionality currently built into the scheduler can be moved into its own program, which will use
+`db` functions to get all livelessons that go past a certain configurable timestamp, and then, in a safe transaction,
+clean them up. Once done, no logic about GC should remain in the scheduler, and will entirely be captured within
+this new service.
 
-### MP1.5 - Separate API and Scheduler and implement message queue
+### MP1.X - Break out `antidote-stats`
 
-### MP1.6 - Structured and centralized logging with Fluentd
+This should be simple - the stats exporter functionality doesn't need to talk to other services, it just needs access
+to the database. So the functionality currently built into the api can be moved into its own program, and it will use
+`db` functions to retrieve data about running state and export to whatever's needed - in this case the existing
+influxdb functionality will suffice, but more thought should **definitely** be put into the format of this data.
+There are a lot of shortcomings with how we currently do things, especially on the lack of useful context, limiting
+our query options. Once done, no logic about stats export should remain in the `api` package, and will entirely be
+captured within this new service.
 
-### MP1.7 - Observability instrumentation
+### MP1.X - Create new `antidote-api` service
 
-### MP1.8 - Syringe Security
+Most of the existing API code is written for the old model (internal state and protobufs) so implementing the new API will likely be a net-new effort, borrowing maybe a little code from the old API if appropriate.
 
-No need to go overboard here because we are running behind cloudflare in prod, but some common sense
-measures should be taken, especially since not everyone will be running behind cloudflare.
+So, create a new `api` package and `antidote-api` binary from scratch following the design above.
 
-Specifically things like rate limiting, source IP stuff, etc etc.
+### MP1.X - Refactor Scheduler
+
+A lot of the existing scheduler code is likely to still be good, especially business logic code that goes through the steps of provisioning or modifying a lesson. However, there are still some tasks to be done:
+
+- The existing internal channels comms needs to be replaced with the new `comms` package using NATS.
+- The whole livelesson/kubelab relationship needs to be tossed out, and any state that the scheduler works with needs to be done with the new `db` package.
+- Need to also decide here if the auto-generated k8s code is worth it. It might be less complex to make direct HTTP calls. This code has and will likely continue to produce a lot of problems wrt dependency management. Should first figure out if it's possible to do the CRD work in the traditional HTTP way - the rest should be easy.
+- Need to put a lot more thought into what you do when a lesson goes wrong. Do you clean up the namespace immediately?
+What kind of retries should you attempt, and how many?
+
+### MP1.X - Move to Go Modules
+
+- [Started work here](https://github.com/nre-learning/syringe/pull/140) - not sure if this will still be useful at this point, but maybe.
+
+- Also need to prune old deps that are no longer needed at this point.
+
+References:
+- https://blog.golang.org/using-go-modules
+- https://blog.golang.org/migrating-to-go-modules
+- https://github.com/golang/go/wiki/Modules#can-i-control-when-gomod-gets-updated-and-when-the-go-tools-use-the-network-to-satisfy-dependencies
+
+### MP1.X - Remove existing verification logic, and create new `antidote-checker` service
+
+### MP1.X - Increase Scheduler Resilience
+
+Adding retry logic so that if endpoints don't start in a certain period of time,
+the pod is killed and we try again.
+
+If there is a catastrophic problem starting a lesson, the namespace should be killed
+right away, so that the user doesn't have to wait for the GC interval just to try again.
+
+### MP1.X - OpenTracing Instrumentation
+
+- Instrument comms package with `not`
+- Instrument api package
+- Instrument antidote-web
+
+Instrument NATS code with `not`, and then anywhere else that needs instrumented.
+
+Will also need to build a reference example for our own ops as well as others that want to collect spans.
+Jaeger seems like the right choice but the adaptive sampling has me weirded out. Will need
+to make sure we set a reasonable default for unsampled collection,
+[seems like this is a minimum setting](https://www.jaegertracing.io/docs/1.6/sampling/#adaptive-sampler).
+
+### MP1.X - Syringe Security
+
+No need to go overboard here but some common sense measures should be taken, specifically
+things like rate limiting, source IP stuff, etc etc.
+
+### MP1.X - Antidote-web catch-up
+
+Antidote-web will need to be instrumented for tracing, to complete the picture with Syringe changes.
+
+We'll also need to create a feedback box that captures the current session ID and sends it to us for follow-up
+
+Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Syringe's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
+
+### MP1.X - Full Docs Update
+
+At this point, much of the entire platform documentation will need to be updated.
 
 ## Misc Things
 
 These need to be done eventually, but could probably be addressed in separate projects.
 This may be removed from this document in the future.
 
+Extend livelesson model to include things passed into the web UI like user ids for LMSs
+
 - **Auth and RBAC** You want to be able to do stuff like allow contributions
 from randos that are in an "unsupported realm"
 - **Lesson Networking** - The existing model works well but has shortcomings.
 In this project we should evaluate NetworkServiceMesh and figure out if it suits our needs.
+Some NATS configuration should be put in place so that only Antidote services can subscribe via queues; if an unexpected service subscribed to a queue, it will result in Antidote missing some messages.
+http://www.imagezap.org/dungeons-and-developers/
+
+This is more of an ops thing, but some NATS configuration should be put in place so that only Antidote services can subscribe via queues; if an unexpected service subscribed to a queue, it will result in Antidote missing some messages.
