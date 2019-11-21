@@ -9,9 +9,7 @@ The first portion of the document section can be read much like a design documen
 is to describe the intended "end state". The latter portion of the document will cover
 the concrete steps and milestones for getting there.
 
-> **NOTE** - this is NOT intended to describe the final state of Syringe. v1.0 plans are just that - v1.0 plans.
-> The point of this effort, in large part, is to make it easier to make future changes to Syringe, and not to get
-> all those changes in now.
+> **NOTE** - this is NOT intended to describe the final state of the Antidote platform. v1.0 plans are just that - v1.0 plans. The point of this effort, in large part, is to make it easier to make future changes to Antidote, and not to get all those changes in now.
 
 ## Existing Architecture and Historical Design Requirements
 
@@ -34,7 +32,7 @@ built of two components - the scheduler, and the API server:
 
 ![](images/syringe_old.png)
 
-At start, this binary loads the entire curriculum into memory. It also maintains an internal map of
+At start, this binary loads the entire curriculum into memory. It also maintains an internal syringemap of
 which lessons are active and what stage they're running, etc. In short, everything is contained within
 this single program - both from a code perspective, as well as runtime state.
 
@@ -51,6 +49,33 @@ However, it also has some key disadvantages:
 - State is kept in-memory, so if Syringe is restarted, state is lost. This is why we currently kill
   all running lessons every time Syringe starts.
 - Fairly opaque - all monitoring is custom, and relies primarily on good logs.
+
+## Deprecation of "Syringe" Name
+
+Before we get too far into the new design, we first have to tackle the topic of, sadly, we're parting ways with
+the name "Syringe".
+
+For a while, we've referred to the entire platform (including the web UI) as "Antidote", even though Antidote isn't really a tangible thing. We've gotten around this by saying that it's an umbrella term, much like Openstack, and that the tangible subcomponents, namely `antidote-web` and `syringe`, make this up.
+
+However, given that Syringe contains the vast majority of the functionality of the platform, having a separate
+name, while certainly cool and well-aligned to the theme of the project, offers nothing but confusion.
+So, before work begins on this project, we will be renaming Syringe to conform to the Antidote terminology, which
+is already the primary terminology we use when explaining the platform to newcomers anyways. Here's a list of
+things we'll want to do to facilitate this change.
+
+- The `antidote-web` repository will remain unaffected, as it is already appropriately named.
+- The `syringe` repository will be renamed `antidote-core`, to reflect the nature of the services that will be
+  housed there.
+- The microservices that run within the Antidote core platform will be prefixed with `antidote-`, to further
+  align them with the Antidote name. Each service will be represented by a compiled binary that's named thusly.
+- The `antidote` repository will be renamed `antidote-docs`, and will be updated to replace all references to
+  Syringe as needed.
+
+With these changes, all platform elements will fall under the name "Antidote", even across repositories. While `antidote-web` will still be maintained in a separate repository because the technology behind it is different, it really is just another service of the Antidote platform, as is `antidote-api`, and so on.
+
+Throughout the rest of this document, we'll be using the term "Antidote", instead of Syringe, unless we're discussing
+existing/legacy functionality. If a particular service is being discussed, it will be called out by name, such
+as `antidote-web`, or `antidote-api`.
 
 ## High-Level Overview of Antidote v1.0 Design
 
@@ -70,7 +95,7 @@ the following points:
 - Manage all state via an external database. All microservices will be totally stateless.
 - Add observability instrumentation to aid in better production debugging and proactive awareness of user experience
 
-![](images/syringe_new.png)
+![](images/antidote_new.png)
 
 The "message bus + database" design is a popular and well-understood distributed systems pattern. Projects
 like [StackStorm](https://github.com/StackStorm/st2) use this architecture to get the best of both worlds.
@@ -78,7 +103,7 @@ In short:
 
 - The database is used for managing state, so that all services can be stateless, and can operate without worrying
   about stepping on each other (database will handle locking and transactions).
-- The message bus is used to notify various components that they have work to do. Syringe services will listen
+- The message bus is used to notify various components that they have work to do. Antidote services will listen
   for certain message types so they know when they need to perform certain operations (pub/sub).
 
 This design has some key advantages over the current approach:
@@ -89,40 +114,13 @@ This design has some key advantages over the current approach:
   those events without Syringe even knowing about it.
 - **Easier to Understand** - It will be easier to reason about, maintain, and contribute to individual services.
 
-## Deprecation of "Syringe" Name
-
-For a while, we've referred to the platform as "Antidote", even though Antidote isn't really a tangible
-thing. We've gotten around this by saying that it's an umbrella term, much like Openstack, and the tangible
-subcomponents, namely `antidote-web` and `syringe`, make this up.
-
-However, given that Syringe contains the vast majority of the functionality of the platform, having a separate
-name, while certainly cool and well-aligned to the theme of the project, offers nothing but confusion.
-So, before work begins on this project, we will be renaming Syringe to conform to the Antidote terminology, which
-is already the primary terminology we use when explaining the platform to newcomers anyways. Here's a list of
-things we'll want to do to facilitate this change.
-
-- The `antidote-web` repository will remain unaffected, as it is already appropriately named.
-- The `syringe` repository will be renamed `antidote-core`, to reflect the nature of the services that will be
-  housed there.
-- The microservices that run within the Antidote core platform will be prefixed with `antidote-`, to further
-  align them with the Antidote name.
-- The `antidote` repository will be renamed `antidote-docs`, and will be updated to replace all references to
-  Syringe as needed.
-
-With these changes, all platform elements will fall under the name "Antidote", even across repositories.
-`antidote-web` is just another service of the Antidote platform, as is `antidote-api`, and so on.
-
-Throughout the rest of this document, we'll be using the term "Antidote", instead of Syringe, unless we're discussing
-existing/legacy functionality. If a particular service is being discussed, it will be called out by name, such
-as `antidote-web`, or `antidote-api`.
-
 ## Design Detail
 
 Now that the high-level design is out of the way, there are a number of specific design areas that should be
 explored in further detail (in no particular order - the end of this document will overview a proposed execution
 plan).
 
-### Syringe API
+### Antidote API
 
 The database changes we'll discuss later are causing us to re-evaluate the API models currently in-use.
 Before we just rewrite in the current model, it's worth re-evaluating if gRPC and protobuf is really working
@@ -153,7 +151,7 @@ properly replace what we already have and set us up for success in the long-term
 - **Auto-generated client and server functions** - it *seems* like [go-swagger](https://github.com/go-swagger/go-swagger) is the current preference for generating server and client code in Go for OpenAPI/Swagger. That repo's README has some notes on why [swagger-codegen](https://github.com/swagger-api/swagger-codegen) is a less desirable choice for this. The [docs](https://goswagger.io/faq/) for `go-swagger` will also be useful.
 - **Built-in routing** - go-swagger has built-in routing that's simple and makes use of the already very good net/http support in Go. Ideally the routing would be fully automated so we can hook it up to the automatically generated code instead of statically matching paths to functions.
 - **Auto-generated swagger docs** - (and endpoint for the swagger UI) - this is actually already being done in the existing grpc-gateway implementation so this just needs to be re-implemented in the new API service.
-- **Dedicated API types** - With the new separate data model for the underlying database types, we can make the API way more simple. There's a lot in the current API that just doesn't need to be there because it's the only place we're storing Syringe types in the code. This will allow us to make the API much more simple and as a result, move towards stability.
+- **Dedicated API types** - With the new separate data model for the underlying database types, we can make the API way more simple. There's a lot in the current API that just doesn't need to be there because it's the only place we're storing Antidote types in the code. This will allow us to make the API much more simple and as a result, move towards stability.
 
 Fortunately, it looks like [Netlify](https://github.com/netlify/open-api) has followed much of the above, so
 we can borrow some ideas from their implementation for this.
@@ -192,7 +190,7 @@ and external needs.
 It's not uncommon in software like this to have a dedicated set of models appropriate for database interactions,
 and then a separate set of models for use in the API, which keeps the API much more simple and stable. The
 database models are able to contain much more granular data, and can be refactored without impacting the API much
-more easily. This is what we'll do in Syringe.
+more easily. This is what we'll do in Antidote.
 
 To facilitate this, we'll develop a new `db` package, which will require two efforts:
 
@@ -216,7 +214,7 @@ The set of database models is likely to go through future changes as it continue
 
 > Regarding the curriculum resources now being stored in the database - we are **not**  moving away from the curriculum-as-code model. The curriculum as represented in Git is still the source of truth, but rather than having each service maintain their own locally cloned Git repository (a sure operational headache), a new `syrctl import` command will be developed to import a curriculum into the database, and all services will just read from there. This is identical to what [StackStorm](https://github.com/StackStorm/st2) does with Packs.
 
-None of this data is actually important enough to spend time on migration scripts to preserve it across versions. State tracking is very temporary, and curriculum resources are populated from a Git repository on the filesystem on import. Operationally, it's not only feasible but in fact far easier to simply recreate the database when moving between versions of Syringe, than it would be to maintain versioned schema definitions and migration scripts. So, Syringe will store its version into the `antidote_meta` table when initialized, and each service will check this value on startup to ensure it matches their own version. When a new version of Syringe is deployed, a one-time database initialization should be run, which will include the import of curriculum resources.
+None of this data is actually important enough to spend time on migration scripts to preserve it across versions. State tracking is very temporary, and curriculum resources are populated from a Git repository on the filesystem on import. Operationally, it's not only feasible but in fact far easier to simply recreate the database when moving between versions of Antidote, than it would be to maintain versioned schema definitions and migration scripts. So, Antidote will store its version into the `antidote_meta` table when initialized, and each service will check this value on startup to ensure it matches their own version. When a new version of Antidote is deployed, a one-time database initialization should be run, which will include the import of curriculum resources.
 
 This document will not drill into the actual schema definitions themselves, as these will be done as part of the proposed implementation in a pull request. However, at a high level, the following tables can be expected to be part of this:
 
@@ -237,20 +235,20 @@ Helpful reading:
 
 ### Microservices and Pub/Sub Messaging
 
-Where Syringe historically has performed all functionality within a single running process, in the new Syringe
+Where Syringe historically has performed all functionality within a single running process, in the new Antidote
 architecture, there are a number of services that will run as separate processes, each performing a specific task:
 
-- `syringe-api`
-- `syringe-scheduler`
-- `syringe-gc`
-- `syringe-stats`
-- `syringe-checker`
+- `antidote-api`
+- `antidote-scheduler`
+- `antidote-gc`
+- `antidote-stats`
+- `antidote-checker`
 
 These will all be discussed in detail below.
 
 ![](images/messaging.jpg)
 
-These services need to communicate with each other to be effective. As an example, the API service receives a request, it will need to inform the scheduler service that there's work to do (e.g. spin up kubernetes resources for a new lesson). To facilitate this, we'll use the [NATS messaging platform](https://nats.io/), as the nature of Syringe's inter-service communication aligns well with the publish-subscribe messaging model that NATS provides. NATS is also written in Go, and built to be extremely fast, and simple. [This blog post](https://storageos.com/nats-good-gotchas-awesome-features/) does a good job of covering the pros and cons of using NATS.
+These services need to communicate with each other to be effective. As an example, the API service receives a request, it will need to inform the scheduler service that there's work to do (e.g. spin up kubernetes resources for a new lesson). To facilitate this, we'll use the [NATS messaging platform](https://nats.io/), as the nature of Antidote's inter-service communication aligns well with the publish-subscribe messaging model that NATS provides. NATS is also written in Go, and built to be extremely fast, and simple. [This blog post](https://storageos.com/nats-good-gotchas-awesome-features/) does a good job of covering the pros and cons of using NATS.
 
 > [NATS Streaming](https://nats-io.github.io/docs/nats_streaming/intro.html) is a project that's designed to fit on top of plain NATS to provide some message reliablity features like buffering when there are no subscribers. While this sounds nice, I believe we can get away with plain NATS, and avoid using NATS Streaming, which will ensure that we don't start relying on it as a crutch. All services that absolutely must receive messages will have multiple copies, and will handle all incoming messages in a goroutine, meaning there will always be a subscriber available to receive incoming messages. As an added protective measure, we may look to leverage [request reply](https://nats-io.github.io/docs/developer/concepts/reqreply.html); as an example, if the API sends a message to the scheduler and it's not acknowledged, we can mark a livelesson as failed in the database. Combined, these tools should allow us to avoid relying on message buffering solutions and keep the messaging layer that much simpler.
 
@@ -274,7 +272,7 @@ service will perform DB reads):
 
 > This document won't specify subject names, but during implementation, these should be written with a hierarchy that groups similar messages together. This will allow subscribers to receive the messages they want more easily.
 
-#### `syringe-api`
+#### `antidote-api`
 
 | []()  |  |
 | ------------- | ------------- |
@@ -283,7 +281,7 @@ service will perform DB reads):
 | Queue Subcriptions    | None |
 | Publishes             | 1,2 |
 
-#### `syringe-scheduler`
+#### `antidote-scheduler`
 
 | []()  |  |
 | ------------- | ------------- |
@@ -292,7 +290,7 @@ service will perform DB reads):
 | Queue Subcriptions    | 1,2 |
 | Publishes             | 4,5 |
 
-#### `syringe-gc`
+#### `antidote-gc`
 
 | []()  |  |
 | ------------- | ------------- |
@@ -301,7 +299,7 @@ service will perform DB reads):
 | Queue Subcriptions    | None |
 | Publishes             | 3 |
 
-#### `syringe-stats`
+#### `antidote-stats`
 
 | []()  |  |
 | ------------- | ------------- |
@@ -310,7 +308,7 @@ service will perform DB reads):
 | Queue Subcriptions    | None |
 | Publishes             | None |
 
-#### `syringe-checker`
+#### `antidote-checker`
 
 | []()  |  |
 | ------------- | ------------- |
@@ -341,7 +339,7 @@ Further Reading:
 This is a feature we've played with in prior versions of the platform, and technically works, but will become a much more reliable feature
 with the presence of a pub/sub messaging system.
 
-When a stage is activated, a message will be sent to subscribers, which will include a set of `syringe-checker` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
+When a stage is activated, a message will be sent to subscribers, which will include a set of `antidote-checker` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
 
 ### Observability Instrumentation
 
@@ -357,8 +355,7 @@ the codebase, most of which are not written meaningfully, and do not contain any
 amount of context necessary to identify or reproduce the problem. Currently, the Syringe logs are rarely even
 inspected, due to the fact that most of what we care about is highly context-dependent. Having everyone's
 experience bleeding together in a single log file is not conducive to drilling into a specific problem.
-If we're going to break Syringe up into microservices, this problem will be made even worse, because it will be
-not just one pointless log file, but rather several that we'll have to ignore.
+If we're going to break the old Syringe up into the new Antidote microservices, this problem will be made even worse, because it will be not just one pointless log file, but rather several that we'll have to ignore.
 
 In nearly every case, what we've been trying to get logs to help us with is to help us understand a user's path through the system, and how they fared along that journey. We've wanted to be able to identify bottlenecks across the entire system, and be able to provide this end-to-end view, applied to a very specific interaction, that may have taken place days ago. These can be best described as request-scoped events, as described in [this excellent blog post](https://peter.bourgon.org/blog/2017/02/21/metrics-tracing-and-logging.html).
 
@@ -369,7 +366,7 @@ For maximum compatibility, we'll make sure that the tracing implementation we se
 collectors like Zipkin and Jaeger, as well as commercial and hosted offerings. Since a large number of inter-service
 interactions will take place via NATS, it makes sense to use [not.go](https://github.com/nats-io/not.go),
 but other implementations may also be appropriate, such as one that is best suited for initializing spans
-for inbound API requests. Antidote-web will also have to have instrumentation added, and the Syringe API will
+for inbound API requests. `antidote-web` will also have to have instrumentation added, and the Antidote API will
 have to be aware of this and be ready to pick up that rich inbound context.
 
 Once this is done, an administrator should be able to take a few key identifiers, like session ID, lesson ID, etc.
@@ -409,7 +406,7 @@ This document will be updated as these milestones are achieved, with links to th
 
 - **Resource creation tooling** - Once the above validation functionality is in place, we should [add tooling to create resources](https://github.com/nre-learning/syringe/issues/84) from these models, located in the new client binary. Try to make use of the jsonschema information made possible in the previous step, setting the stage to do the same thing from a Web UI later. https://github.com/nre-learning/syringe/issues/84
 
-- **Remove syringed-mock** - since the API is its own service at this point, we can get rid of syringed-mock and simply deploy only the API microservice with prepopulated DB data that doesn't change since there's no scheduler. Please don't assume this is true, please test this is true before removing syringed-mock, and preferably also update the docs. We should be able to pre-populate the database with some mocked livelesson data, start only the API service, and it will provide access to a "running lesson" in the same way syringed-mock does today.
+- **Remove syringed-mock** - since the API is its own service at this point, we can get rid of `syringed-mock` and simply deploy only the API microservice with prepopulated DB data that doesn't change since there's no scheduler. Please don't assume this is true, please test this is true before removing `syringed-mock`, and preferably also update the docs. We should be able to pre-populate the database with some mocked livelesson data, start only the API service, and it will provide access to a "running lesson" in the same way `syringed-mock` does today.
 
 ### MP1.X - Break out `antidote-gc`
 
@@ -449,8 +446,7 @@ What kind of retries should you attempt, and how many?
 
 ### MP1.X - Move to Go Modules
 
-- [Started work here](https://github.com/nre-learning/syringe/pull/140) - not sure if this will still be useful at this point, but maybe.
-
+- [Started work here](https://github.com/nre-learning/syringe/pull/140) - not sure if this will still be useful at this point, but maybe. Should definitely have the previous work on the scheduler finished by this point - if we decide not to use auto-generated code for k8s interaction, this work will be MUCH simpler.
 - Also need to prune old deps that are no longer needed at this point.
 
 References:
@@ -481,18 +477,18 @@ Jaeger seems like the right choice but the adaptive sampling has me weirded out.
 to make sure we set a reasonable default for unsampled collection,
 [seems like this is a minimum setting](https://www.jaegertracing.io/docs/1.6/sampling/#adaptive-sampler).
 
-### MP1.X - Syringe Security
+### MP1.X - Antidote Security
 
 No need to go overboard here but some common sense measures should be taken, specifically
 things like rate limiting, source IP stuff, etc etc.
 
 ### MP1.X - Antidote-web catch-up
 
-Antidote-web will need to be instrumented for tracing, to complete the picture with Syringe changes.
+Antidote-web will need to be instrumented for tracing so we get that additional context from end-to-end
 
 We'll also need to create a feedback box that captures the current session ID and sends it to us for follow-up
 
-Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Syringe's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
+Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Antidote's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
 
 ### MP1.X - Full Docs Update
 
