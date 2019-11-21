@@ -2,6 +2,11 @@
 
 > **WARNING What follows below is very temporary**. These are very rough notes taken over a long period of time from a variety of sources. I'm pushing it raw so that I can stop holding these scratchpads on my computer. Please do not view anything below as particularly accurate, or even needing to be done. This will get re-organized very soon.
 
+
+- Web UI that includes wizards for building images, as well as lessons (which can use the available created images). This would result in a PR, auth'd with github
+- Workflows in stackstorm for standing up a preview site. Could optionally trigger on PR creation, or even W
+- Image build workflows that integrate with MP3
+
 In this project we'll add a lot of useful tooling on top of selfmedicate to make it even easier to develop lessons. Roughly this will include
 
 - Lesson building and editing in the browser
