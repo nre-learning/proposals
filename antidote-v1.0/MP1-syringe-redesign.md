@@ -336,10 +336,60 @@ Further Reading:
 
 ### Objective Verification
 
-This is a feature we've played with in prior versions of the platform, and technically works, but will become a much more reliable feature
-with the presence of a pub/sub messaging system.
+One thing that wasn't thought of in the original proof-of-concept for this platform was the idea of including optional
+objectives for the learner to accomplish. While anything is possible, since it's an on-demand learning platform,
+it's nice to have some idea that you've accomplished the thing you've set out to learn.
 
-When a stage is activated, a message will be sent to subscribers, which will include a set of `antidote-checker` services or something like that. The job of this service is to listen for lesson GC or stage change (or lesson start) events and add verification tasks as needed. It will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the back-end state accordingly. The API simply periodically checks the state.
+We've played around with bolt-on feature additions that accomplish this in prior versions of the platform, but they're not implemented well, and part of that is due to architectural limitations. Now that Antidote will be based on pub/sub microservices, this becomes much easier to implement.
+
+#### Learner Experience
+
+For the learner, this will manifest itself fairly simply. Each stage may or may not contain optional objectives for them to perform. This adds a layer of activity beyond the current "next, next, next..." approach of the current lessons, and inspires the learner to actually DO something. I imagine having this feature in place will allow us to create lessons that are essentially half-finished - the idea being that the learner would complete a fabric configuration, or remediate a problem, etc.
+
+To indicate that a given stage includes optional objectives, there will be some kind of button in the lesson UI that will indicate something like "0/3 objectives completed". When clicked, this button will pop up a modal box that explains each objective, and will contain a green check mark next to any objectives that are completed. At a glance, either at the button, or at this dialog, the user should be able to see what they still need to do.
+
+When all objectives are completed, the button will glow or flash indicating full completion. The aforementioned dialog will show a message that is defined by the lesson author in the lesson metadata. We could also provide buttons for sharing the accomplishment via social. In the future, additional integrations with external systems may also be possible, but for the initial feature, we'll leave it at this.
+
+#### Lesson Author Experience
+
+Objectives are defined per-stage. So, at the very minimum, if a lesson author wants to take advantage of this feature, they need to add the `objectives` field as below. This field should have a list of strings for a value, and that list must be greater than 0. If the author doesn't want to use this feature, just leave the field out (this is what's true today).
+
+```yaml
+stages:
+  - id: 1
+    description: Stage 1
+    verification:
+      objectives:
+      - The vqfx must have BGP configured
+      - The linux endpoint must have a text file in the antidote user directory called "foobar"
+      completeMessage: Congrats!
+```
+
+The presence of a nonzero list of `objective` entries will cause syringe to perform additional checks on the lesson directory. Each stage that uses this feature needs to have a `objectives` directory, and within that directory must be a Python script for checking if that objective is met within the lesson environment.
+
+![Screenshot from 2019-09-17 11-38-26](https://user-images.githubusercontent.com/4230395/65069517-ad968280-d93f-11e9-949d-7dcfe0239894.png)
+
+This is true of any stage that uses this feature. The lesson import functionality in the `db` package will be augmented to incorporate automated checks to ensure the right files are in place.
+
+#### Back-End Implementation
+
+Antidote-web will need to be updated to take advantage of this functionality, but since most of the work is being done by the core services, this should be fairly straightfowrard. The status of each objective will be added as a field to the existing livelesson API, so from a front-end perspective, we just need to periodically check the livelesson API (which is already done when waiting for lessons to start) and update any front-end UI elements as described above in the "learner experience" section accordingly. We'll need a new button, and a new dialog to contain the objective statuses. These will be hidden by default, and shown if the livelesson API contains any objective statuses, since this is the indication that they're defined in the lesson stage.
+
+As shown in a previous section, a message will be sent onto the message bus when new lessons or stage change events take place. These are sent by the `antidote-api` service. This service will be responsible for looking at the lesson definition to see if optional objectives are included, in which case it will send a second, separate message to a dedicated subject for the `antidote-checker` services to listen on a queue for. The job of this service is to listen for lesson GC or stage change (or lesson start) events and start the process for ongoing verification of that lesson in a goroutine.
+
+> TODO(mierdin): Put more thought into how the checker service receives notifications of new, changed, or deleted lessons. If we do it through comms, we have to think through all the messages, and it likely needs its own subject (since it can't listen on the same queue that the scheduler is listening on). We could also just not listen at all to NATS and instead just look at active livelessons in the DB directly.
+
+Within this goroutine, the checker service will spin up a pod with the `objective-checker` (this is an image we'll define in https://github.com/nre-learning/antidote-images) image for every optional objective defined in the stage.  This pod will repeatedly run the corresponding Python script in the lesson directory. So for the pod spun up for stage 1 objective 2, we'll execute `stage1/objectives/objective1.py` in a goroutine. This will repeat for every objective.
+
+`antidote-checker` will maintain state for which <lesson>-<session>-<stage>-<objective> is being checked in which pod, and updating the status in the relevant `livelesson` entry in the DB. This will allow the livelesson API to be updated accordingly, and in turn, the web UI.
+
+Each objective will have one of three statuses:
+
+- Incomplete
+- Complete
+- Error
+
+We'll definitely want clean-up activities for both stage changes and lesson GC events. We may also consider shutting down all verification pods the moment all objectives are verified.
 
 ### Observability Instrumentation
 
@@ -482,6 +532,8 @@ to make sure we set a reasonable default for unsampled collection,
 No need to go overboard here but some common sense measures should be taken, specifically
 things like rate limiting, source IP stuff, etc etc.
 
+### MP1.X - Implement `antidote-checker`
+
 ### MP1.X - Antidote-web catch-up
 
 Antidote-web will need to be instrumented for tracing so we get that additional context from end-to-end
@@ -489,6 +541,8 @@ Antidote-web will need to be instrumented for tracing so we get that additional 
 We'll also need to create a feedback box that captures the current session ID and sends it to us for follow-up
 
 Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Antidote's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
+
+Also changes to the front-end as needed for optional objective checking as detailed above.
 
 ### MP1.X - Full Docs Update
 
@@ -509,3 +563,5 @@ Some NATS configuration should be put in place so that only Antidote services ca
 http://www.imagezap.org/dungeons-and-developers/
 
 This is more of an ops thing, but some NATS configuration should be put in place so that only Antidote services can subscribe via queues; if an unexpected service subscribed to a queue, it will result in Antidote missing some messages.
+
+I am not sure we can get away entirely with putting all curriculum definitions into the database. There are a lot of files in a lesson that have nothing to do with DB types. Configuration files, scripts, verification scripts, etc. You will likely have to import the basic types into the DB but still give all services access to a read-only init container for the rest.
