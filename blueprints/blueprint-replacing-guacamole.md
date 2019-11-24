@@ -34,19 +34,20 @@ While we've been contemplating alternatives for a few weeks or even months, the 
 
 The good news is there's a project out there that is not only much more well-aligned with our goals and capabilities, but it already has a place in NRE Labs' origin story. Early on in the project, we considered using [`xterm.js`](https://xtermjs.org/), and even built an early prototype with it, before deciding to move to the combined server and client architecture of Guacamole.
 
-`xterm.js` is actually a very popular solution for using the terminal in the browser. More popular than Guacamole, even. Take a look at their [documented real-world uses](https://github.com/xtermjs/xterm.js/#real-world-uses). The main drawback when looking at the project is, it doesn't seem to have a server-side component that we could use to effectively replace the servlet we got with Guacamole. This is a must-have, because without this we'd have to fundamentally change Antidote to expose SSH presentations to the internet, which is not only a bad idea, but also a significant architectural change.
+`xterm.js` is actually a very popular solution for using the terminal in the browser. More popular than Guacamole, even. Take a look at their [documented real-world uses](https://github.com/xtermjs/xterm.js/#real-world-uses). The main drawback when looking at the project is, it doesn't seem to have a server-side component that we could use to effectively replace the servlet we got with Guacamole. This is a must-have, because without this we'd have to fundamentally change Antidote to expose SSH presentations to the internet, which is not only a bad idea, but also a significant architectural change. We need a replacement, not just for the terminal functionality in the browser, but for the entire architecture.
 
 Fortunately it seems this is a well-worn path. [webssh2](https://github.com/billchurch/webssh2), while described as a "bare-bones example", should provide at least a basis for, if not a full solution for this problem. It contains a Node.js app that provides websocket connections to xterm.js (a vast improvement on single HTTP calls per-keystroke that we're currently doing), via [socket.io](https://socket.io/) and then proxies those streams into SSH connections. This application can be deployed in the same way we're currently deploying the `guacd` and Guacamole servlet applications:
 
 ![](images/guacvsxterm.png)
 
-The reason I think this goes beyond a "bare bones example" for us is that `webssh2` also includes an example client, which shows a single terminal in the browser using xterm.js. It's not really meant to do much beyond showing basic capabilities. However, since our xterm.js implementation will be contained fully in `antidote-web`, we won't actually need to use this. For us, `webssh2` can and will be deployed as a separate service within our cluster. `antidote-web` will transition to a pure HTML/CSS/JS application, requiring no servlets or other server-side logic whatsoever. For this architecture, the Node.js application within `webssh2` should suffice very well.
+The reason I think `webssh2` describes itself as a "bare bones example" is that it also includes an example client, which shows a single terminal in the browser using xterm.js. It's not really meant to do much beyond showing basic capabilities. However, since our xterm.js implementation will be contained fully in `antidote-web`, we won't actually need to use this. For our purposes, the server-side component of `webssh2` can be deployed on its own, as a standalone service within our cluster, for the sole purpose of translating websocket streams to SSH connections. As a result, `antidote-web` will transition to a pure HTML/CSS/JS application, requiring no servlets or other server-side logic whatsoever to be maintained as part of that project. This is a much simpler, and cleaner solution.
 
 This solution has a few key benefits for the project:
 
 - `xterm.js` is a much more widely used terminal-in-browser solution. It doesn't push an end-to-end solution, but rather allows us to build the experience we want from base components. This gives us more flexibility to customize to fit our needs.
 - The entire solution (both client and server) is written in Javascript, which is in contrast to the combination of C, Java, and Javascript that Guacamole uses. This means it's much easier for web-savvy community members to contribute, and lets us treat the solution less like a black-box.
 - A drastic reduction in footprint and increase in performance will make it *much* easier to preview lesson content in selfmedicate. We've determined that the existing solution is actually a significant impediment to building lesson content, and fixing this should result in a better experience there, greatly boosting curriculum contribution engagement.
+- A much lighter-weight transport (websockets) combined with much better support for modern web standards means the terminal will no longer be an impediment to strong mobile support. Given that this work is taking place within the context of a larger project to re-vamp `antidote-web` as a whole, I view this as the final step in moving towards officially supporting mobile with this project (finally!)
 - The components used in this solution each have really great documentation, and are all very active, welcoming projects. I opened a PR to `webssh2` to introduce a security feature we'd want to have in place for this project, and [it was merged in less than a day](https://github.com/billchurch/webssh2/pull/163). To me, this gives me the warm and fuzzies about relying on them as dependencies, and aligns well with the true spirit of open source - projects mutually improving each other.
 
 ## Work Execution Plan
@@ -65,6 +66,8 @@ In this case, I feel strongly that it will be easy enough to find alternatives t
 
 ## Loose Threads
 
-https://community.networkreliability.engineering/t/web-terminal-emulator-replacement/184
-https://community.networkreliability.engineering/t/guacamole-proxy-only-for-ssh-or-vnc-too/44
+These are some open discussions on this topic that will need to be linked here.
+
+- https://community.networkreliability.engineering/t/web-terminal-emulator-replacement/184
+- https://community.networkreliability.engineering/t/guacamole-proxy-only-for-ssh-or-vnc-too/44
 - [Support VNC Connections Too](https://github.com/nre-learning/antidote-web/issues/65)
