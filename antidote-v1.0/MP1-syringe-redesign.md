@@ -216,6 +216,8 @@ The set of database models is likely to go through future changes as it continue
 
 None of this data is actually important enough to spend time on migration scripts to preserve it across versions. State tracking is very temporary, and curriculum resources are populated from a Git repository on the filesystem on import. Operationally, it's not only feasible but in fact far easier to simply recreate the database when moving between versions of Antidote, than it would be to maintain versioned schema definitions and migration scripts. So, Antidote will store its version into the `antidote_meta` table when initialized, and each service will check this value on startup to ensure it matches their own version. When a new version of Antidote is deployed, a one-time database initialization should be run, which will include the import of curriculum resources.
 
+> I am not sure we can get away entirely with putting all curriculum definitions into the database. There are a lot of files in a lesson that have nothing to do with DB types. Configuration files, scripts, verification scripts, etc. Creating a model for Antidote definitions should still definitely be done, as this will enable us to create better tooling for creation/maintainance of curriculum resources, but it's likely that we'll still have to do something with init containers, at least at the pod level. Maybe this change will just mean we don't have to do it in two places like we're doing today.
+
 This document will not drill into the actual schema definitions themselves, as these will be done as part of the proposed implementation in a pull request. However, at a high level, the following tables can be expected to be part of this:
 
 - **antidote_meta** - k/v table for storing information about the version of Antidote that is working with this data
@@ -442,13 +444,15 @@ Reading:
 
 ## Mini-Project Milestones
 
-To facilitate community involvement, and create a logical breakdown of steps to the end goal, a set of milestones is listed below. Where the sections above described the ideal end-state, the below sections will dive a little bit into how to get there, with the added structure of time/order. Each section will have some slightly more detailed but still high-level guiding points that the implementation for each should keep in mind.
+To facilitate community involvement, and create a logical breakdown of steps to the end goal, a set of milestones is listed below. Where the sections above described the ideal end-state, the below sections will dive a little bit into how to get there, with the added structure of timing/order. Each section will have some slightly more detailed but still high-level guiding points, as well as any unanswered questions that the implementation for each should keep in mind.
 
 This document will be updated as these milestones are achieved, with links to the Pull Request(s) and/or Issues that address them. It should be noted that while much prototyping was performed in order to hash out the details of the design that we've covered thus far, there are still some questions that will need to be answered at the time of implementation. Please read the sections below as well as any linked pull requests or issues for more detail on this - these are all important considerations to work out prior to calling any work "done".
 
 > **NOTE** - if you are interested in working on one of these milestones, please **first** reach out via one of the issues linked below, or through any of our other communication mechanisms. Many of these efforts are fairly complicated, and it's difficult to capture everything that must take place within this design, and it's highly unlikely that your work will be merged without some initial conversation to coordinate things. So please do not just start working on something without first discussing with us.
 
-### MP1.X - Create new `db` package
+### MP1.1 - Create new `db` package
+
+The first task **must** be to start with a renewed data model for Antidote. The following should be considered:
 
 - **Create database models and functions** - Make sure we perform transactions or [locks on a per-row basis](https://www.postgresql.org/docs/9.1/explicit-locking.html) when performing writes for safety. The scheduler processes should also use this to avoid contention when moving between stages
 
@@ -458,9 +462,7 @@ This document will be updated as these milestones are achieved, with links to th
 
 - **Remove syringed-mock** - since the API is its own service at this point, we can get rid of `syringed-mock` and simply deploy only the API microservice with prepopulated DB data that doesn't change since there's no scheduler. Please don't assume this is true, please test this is true before removing `syringed-mock`, and preferably also update the docs. We should be able to pre-populate the database with some mocked livelesson data, start only the API service, and it will provide access to a "running lesson" in the same way `syringed-mock` does today.
 
-### MP1.X - Break out `antidote-gc`
-
-https://github.com/nre-learning/syringe/issues/99
+### MP1.2 - Break out `antidote-gc`
 
 This should be simple - the GC functionality doesn't need to talk to other services, it just needs access to the
 database. So the functionality currently built into the scheduler can be moved into its own program, which will use
@@ -468,7 +470,9 @@ database. So the functionality currently built into the scheduler can be moved i
 clean them up. Once done, no logic about GC should remain in the scheduler, and will entirely be captured within
 this new service.
 
-### MP1.X - Break out `antidote-stats`
+This will close https://github.com/nre-learning/syringe/issues/99, so please link accordingly in the PR.
+
+### MP1.3 - Break out `antidote-stats`
 
 This should be simple - the stats exporter functionality doesn't need to talk to other services, it just needs access
 to the database. So the functionality currently built into the api can be moved into its own program, and it will use
@@ -478,13 +482,19 @@ There are a lot of shortcomings with how we currently do things, especially on t
 our query options. Once done, no logic about stats export should remain in the `api` package, and will entirely be
 captured within this new service.
 
-### MP1.X - Create new `antidote-api` service
+### MP1.4 - Implement `comms` package
+
+A new `comms` package which follows the conventions outlined above should be implemented next.
+
+- We should use authentication with NATS, and this should be non-optional. This will help prevent unauthorized services connecting to NATS and siphoning messages away from Antidote services.
+
+### MP1.5 - Create new `antidote-api` service
 
 Most of the existing API code is written for the old model (internal state and protobufs) so implementing the new API will likely be a net-new effort, borrowing maybe a little code from the old API if appropriate.
 
-So, create a new `api` package and `antidote-api` binary from scratch following the design above.
+So, create a new `api` package and `antidote-api` binary from scratch following the design above. This service should be able to write to the database (i.e. create livelesson entries) and send events into NATS (even though no one will be listening yet) when this step is finished.
 
-### MP1.X - Refactor Scheduler
+### MP1.6 - Refactor Scheduler
 
 A lot of the existing scheduler code is likely to still be good, especially business logic code that goes through the steps of provisioning or modifying a lesson. However, there are still some tasks to be done:
 
@@ -494,7 +504,7 @@ A lot of the existing scheduler code is likely to still be good, especially busi
 - Need to put a lot more thought into what you do when a lesson goes wrong. Do you clean up the namespace immediately?
 What kind of retries should you attempt, and how many?
 
-### MP1.X - Move to Go Modules
+### MP1.7 - Move to Go Modules
 
 - [Started work here](https://github.com/nre-learning/syringe/pull/140) - not sure if this will still be useful at this point, but maybe. Should definitely have the previous work on the scheduler finished by this point - if we decide not to use auto-generated code for k8s interaction, this work will be MUCH simpler.
 - Also need to prune old deps that are no longer needed at this point.
@@ -505,9 +515,11 @@ References:
 - https://github.com/golang/go/wiki/Modules#can-i-control-when-gomod-gets-updated-and-when-the-go-tools-use-the-network-to-satisfy-dependencies
 - https://github.com/golang/go/wiki/Modules#gomod
 
-### MP1.X - Remove existing verification logic, and create new `antidote-checker` service
+### MP1.8 - Remove existing verification logic, and create new `antidote-checker` service
 
-### MP1.X - Increase Scheduler Resilience
+At this point, the data models for the `db` and `api` packages should be updated to include new abstractions for the optional objective functionality. So, the only thing left to do is make sure any remnant of the old functionality is fully removed, especially from the scheduler, and create a new service that will listen for lesson start events.
+
+### MP1.9 - Increase Scheduler Resilience
 
 Adding retry logic so that if endpoints don't start in a certain period of time,
 the pod is killed and we try again.
@@ -515,7 +527,7 @@ the pod is killed and we try again.
 If there is a catastrophic problem starting a lesson, the namespace should be killed
 right away, so that the user doesn't have to wait for the GC interval just to try again.
 
-### MP1.X - OpenTracing Instrumentation
+### MP1.10 - OpenTracing Instrumentation
 
 - Instrument comms package with `not`
 - Instrument api package
@@ -528,24 +540,23 @@ Jaeger seems like the right choice but the adaptive sampling has me weirded out.
 to make sure we set a reasonable default for unsampled collection,
 [seems like this is a minimum setting](https://www.jaegertracing.io/docs/1.6/sampling/#adaptive-sampler).
 
-### MP1.X - Antidote Security
+### MP1.11 - Antidote Security
 
 No need to go overboard here but some common sense measures should be taken, specifically
 things like rate limiting, source IP stuff, etc etc.
 
-### MP1.X - Implement `antidote-checker`
+### MP1.12 - Antidote-web catch-up
 
-### MP1.X - Antidote-web catch-up
+- Antidote-web will need to be instrumented for tracing so we get that additional context from end-to-end
 
-Antidote-web will need to be instrumented for tracing so we get that additional context from end-to-end
+- We'll also need to create a feedback box that captures the current session ID and sends it to us for follow-up
 
-We'll also need to create a feedback box that captures the current session ID and sends it to us for follow-up
+- Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Antidote's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
 
-Also, Antidote-web should not have any timeouts. It should simply report what the API says. If Antidote's timeout triggers, it should throw an exception to our error handling solution while also marking the lesson as failed, so the web UI can show that to the user.
+- Also changes to the front-end as needed for optional objective checking as detailed above.
+- Changing optional objective checking functionality to match new API
 
-Also changes to the front-end as needed for optional objective checking as detailed above.
-
-### MP1.X - Full Docs Update
+### MP1.13 - Full Docs Update
 
 At this point, much of the entire platform documentation will need to be updated.
 
@@ -554,15 +565,6 @@ At this point, much of the entire platform documentation will need to be updated
 These need to be done eventually, but could probably be addressed in separate projects.
 This may be removed from this document in the future.
 
-Extend livelesson model to include things passed into the web UI like user ids for LMSs
-
-- **Auth and RBAC** You want to be able to do stuff like allow contributions
-from randos that are in an "unsupported realm"
+- Extend livelesson model to include things passed into the web UI like user ids for LMSs
 - **Lesson Networking** - The existing model works well but has shortcomings.
-In this project we should evaluate NetworkServiceMesh and figure out if it suits our needs.
-Some NATS configuration should be put in place so that only Antidote services can subscribe via queues; if an unexpected service subscribed to a queue, it will result in Antidote missing some messages.
-http://www.imagezap.org/dungeons-and-developers/
-
-This is more of an ops thing, but some NATS configuration should be put in place so that only Antidote services can subscribe via queues; if an unexpected service subscribed to a queue, it will result in Antidote missing some messages.
-
-I am not sure we can get away entirely with putting all curriculum definitions into the database. There are a lot of files in a lesson that have nothing to do with DB types. Configuration files, scripts, verification scripts, etc. You will likely have to import the basic types into the DB but still give all services access to a read-only init container for the rest.
+- http://www.imagezap.org/dungeons-and-developers/
