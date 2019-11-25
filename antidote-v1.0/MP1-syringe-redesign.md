@@ -222,7 +222,7 @@ This document will not drill into the actual schema definitions themselves, as t
 - **antidote_resource_collections** - storing collection definitions. This should only be written to on curriculum load - the rest of the time it will just be read.
 - **antidote_resource_lessons** - storing lesson definitions. This should only be written to on curriculum load - the rest of the time it will just be read.
 - **antidote_state_livelessons** - tracking active lessons, including any optional objectives, and their status
-- **antidote_state_sessions** - Antidote will generate unique session IDs via the API, and store that session data here. We don't track specific users, but we should be storing enough data about the requestor to prohibit some of the more basic forms of abuse, like source IP (v4/v6). This is no more than is already being collected, and this will only be used for purposes of abuse prevention.
+- **antidote_state_sessions** - Antidote will generate [unique UUIDs](https://github.com/nre-learning/proposals/pull/3#issuecomment-558008802) for sessions via the API, and store that session data here. We don't track specific users, but we should be storing enough data about the requestor to prohibit some of the more basic forms of abuse, like source IP (v4/v6). This is no more than is already being collected, and this will only be used for purposes of abuse prevention.
 
 > VerificationTasks and KubeLab as mentioned at the top of this section are no longer needed, and do not have a place here.
 
@@ -503,6 +503,7 @@ References:
 - https://blog.golang.org/using-go-modules
 - https://blog.golang.org/migrating-to-go-modules
 - https://github.com/golang/go/wiki/Modules#can-i-control-when-gomod-gets-updated-and-when-the-go-tools-use-the-network-to-satisfy-dependencies
+- https://github.com/golang/go/wiki/Modules#gomod
 
 ### MP1.X - Remove existing verification logic, and create new `antidote-checker` service
 
