@@ -494,6 +494,10 @@ Most of the existing API code is written for the old model (internal state and p
 
 So, create a new `api` package and `antidote-api` binary from scratch following the design above. This service should be able to write to the database (i.e. create livelesson entries) and send events into NATS (even though no one will be listening yet) when this step is finished.
 
+TODO:
+
+- `tier` is now entirely an API concept only. The database package will not contain any logic to filter based on `tier`. This needs to be only an API concept. The API should know what tier is configured, and filter lesson definitions accordingly. Not just on listing lessons but also on new requests or getting detail on a specific lesson
+
 ### MP1.6 - Refactor Scheduler
 
 A lot of the existing scheduler code is likely to still be good, especially business logic code that goes through the steps of provisioning or modifying a lesson. However, there are still some tasks to be done:
