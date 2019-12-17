@@ -563,6 +563,7 @@ things like rate limiting, source IP stuff, etc etc.
 ### MP1.13 - Full Docs Update
 
 At this point, much of the entire platform documentation will need to be updated.
+Since the NRE Labs documentation moved to Gitbook, we should consider doing the same here.
 
 ## Misc Things
 
@@ -572,3 +573,17 @@ This may be removed from this document in the future.
 - Extend livelesson model to include things passed into the web UI like user ids for LMSs
 - **Lesson Networking** - The existing model works well but has shortcomings.
 - http://www.imagezap.org/dungeons-and-developers/
+
+## Definition of Done
+
+With MP1, we have an opportunity to really improve on some of the shortcomings of the original approach.
+If we go through this plan and just barely implement the features described, we will have failed. Rather,
+each item in this plan needs to be thought through properly, and quality must take priority.
+
+To facilitate this, it's important that we have a definition of what "done" means to this project, and especially
+the MP1 initiative. It's not enough just to write the feature, it needs to meet a minimum set of requirements that
+apply to all contributions of any kind. All MP1 work (and beyond) needs to meet these:
+
+- **Sufficient test coverage** - At least 85% test coverage for all new code. That said, not all tests are the same, and you can have really poorly tested code with 100% test coverage. Therefore, this goal shouldn't be followed blindly, but rather, attention should be paid to writing **good tests** that actually accomplish their goals. This guidance will be reflected in all Pull Request reviews
+
+- **Docs updates** - not all changes require docs updates. Maybe a contribution simply refactors a function that's never exposed to the user. However, docs updates should at least be considered for all new MP1 work. Be prepared to either provide a docs PR for your work, or provide a reason why you think its not needed.
